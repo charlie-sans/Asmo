@@ -50,11 +50,11 @@ Gui.Checkbox(surface, "Enable feature", ref checked, Colors.Cyan, mouseX, mouseY
 ```
 
 ## GameEnvironment Configuration
-- `GameEnvironment.AssetRoot` — Path to assets
-- `GameEnvironment.WindowTitle` — Window title
-- `GameEnvironment.DefaultFont` — Path to default font
-- `GameEnvironment.ShowFps` — Show FPS counter
-- `GameEnvironment.ConfigPath` — Path to config file
+- `GameEnvironment.AssetRoot` â€” Path to assets
+- `GameEnvironment.WindowTitle` â€” Window title
+- `GameEnvironment.DefaultFont` â€” Path to default font
+- `GameEnvironment.ShowFps` â€” Show FPS counter
+- `GameEnvironment.ConfigPath` â€” Path to config file
 
 ## Contributing
 Pull requests and issues are welcome! Please:
@@ -63,4 +63,4 @@ Pull requests and issues are welcome! Please:
 - Keep code style consistent
 
 ## License
-MIT License
+AGPL V3
