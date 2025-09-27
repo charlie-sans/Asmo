@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="../AstroTestGame/AstroTestGame.csproj" />
+  <Project Path="Asmo.csproj" />
+</Solution>
