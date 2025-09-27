@@ -251,6 +251,29 @@ namespace Asmo.Sound
 
         // Query if VGM is playing
         public bool IsVgmPlaying => _soundOut?.PlaybackState == PlaybackState.Playing && _currentVgm != null;
+
+        // Play a one-shot sound from an instrument
+        public void PlayOneShotFromInstrument(float freq, float dur, float amp, Instrument instrument)
+        {
+            var sampleSource = instrument(freq, dur, amp);
+            var waveSource = new SampleToWaveSource(sampleSource);
+            waveSource.SetLength((long)(sampleSource.WaveFormat.SampleRate * dur));
+            PlayOneShot(waveSource);
+        }
+
+        // Play a beep sound (default: square wave)
+        public void PlayBeep(float freq = 880f, float dur = 0.12f, float amp = 0.5f, Instrument instrument = null)
+        {
+            instrument ??= (f, d, a) => new SimpleSquareWaveSource(f, d, a);
+            PlayOneShotFromInstrument(freq, dur, amp, instrument);
+        }
+
+        // Play a boop sound (default: drum kick)
+        public void PlayBoop(float freq = 440f, float dur = 0.12f, float amp = 0.5f, Instrument instrument = null)
+        {
+            instrument ??= (f, d, a) => SoundSynth.DrumKick(1f, 440f, 40f, 1f);
+            PlayOneShotFromInstrument(freq, dur, amp, instrument);
+        }
     }
 
     public class SampleToWaveSource : IWaveSource

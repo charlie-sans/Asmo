@@ -82,6 +82,88 @@ namespace Asmo.Gfx
                     }
                 }
         }
+        // Draw a line using Bresenham's algorithm
+        public void DrawLine(int x0, int y0, int x1, int y1, Color color)
+        {
+            int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+            int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+            int err = dx + dy, e2;
+            while (true)
+            {
+                SetPixel(x0, y0, color);
+                if (x0 == x1 && y0 == y1) break;
+                e2 = 2 * err;
+                if (e2 >= dy) { err += dy; x0 += sx; }
+                if (e2 <= dx) { err += dx; y0 += sy; }
+            }
+        }
+
+        // Draw a circle (midpoint algorithm)
+        public void DrawCircle(int cx, int cy, int radius, Color color)
+        {
+            int x = radius, y = 0, err = 0;
+            while (x >= y)
+            {
+                SetPixel(cx + x, cy + y, color); SetPixel(cx + y, cy + x, color);
+                SetPixel(cx - y, cy + x, color); SetPixel(cx - x, cy + y, color);
+                SetPixel(cx - x, cy - y, color); SetPixel(cx - y, cy - x, color);
+                SetPixel(cx + y, cy - x, color); SetPixel(cx + x, cy - y, color);
+                y++;
+                if (err <= 0) { err += 2 * y + 1; }
+                if (err > 0) { x--; err -= 2 * x + 1; }
+            }
+        }
+
+        // Draw a filled circle
+        public void DrawFilledCircle(int cx, int cy, int radius, Color color)
+        {
+            for (int y = -radius; y <= radius; y++)
+                for (int x = -radius; x <= radius; x++)
+                    if (x * x + y * y <= radius * radius)
+                        SetPixel(cx + x, cy + y, color);
+        }
+
+        // Draw an outlined rectangle
+        public void DrawOutlinedRect(int x, int y, int w, int h, Color color)
+        {
+            DrawLine(x, y, x + w - 1, y, color);
+            DrawLine(x, y, x, y + h - 1, color);
+            DrawLine(x + w - 1, y, x + w - 1, y + h - 1, color);
+            DrawLine(x, y + h - 1, x + w - 1, y + h - 1, color);
+        }
+
+        // Draw an ellipse (outline)
+        public void DrawEllipse(int cx, int cy, int rx, int ry, Color color)
+        {
+            int x, y;
+            int rx2 = rx * rx, ry2 = ry * ry;
+            int tworx2 = 2 * rx2, twory2 = 2 * ry2;
+            int px = 0, py = tworx2 * ry;
+            // Region 1
+            for (x = 0, y = ry, px = 0, py = tworx2 * ry; rx2 * y > ry2 * x; x++)
+            {
+                SetPixel(cx + x, cy + y, color); SetPixel(cx - x, cy + y, color);
+                SetPixel(cx + x, cy - y, color); SetPixel(cx - x, cy - y, color);
+                px += twory2;
+                if (2 * px > py)
+                {
+                    y--;
+                    py -= tworx2;
+                }
+            }
+            // Region 2
+            for (x = rx, y = 0, px = 0, py = twory2 * rx; ry2 * x > rx2 * y; y++)
+            {
+                SetPixel(cx + x, cy + y, color); SetPixel(cx - x, cy + y, color);
+                SetPixel(cx + x, cy - y, color); SetPixel(cx - x, cy - y, color);
+                py += tworx2;
+                if (2 * py > px)
+                {
+                    x--;
+                    px -= twory2;
+                }
+            }
+        }
     }
 
     public class Sprite

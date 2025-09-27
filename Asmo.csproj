@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="AstroTestGame\**" />
+    <EmbeddedResource Remove="AstroTestGame\**" />
+    <None Remove="AstroTestGame\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CSCore" Version="1.2.1.2" />
     <PackageReference Include="FNA.NET" Version="2.1.2.2506" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
