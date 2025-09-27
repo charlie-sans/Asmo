@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-namespace Megadrive
+﻿namespace Megadrive
 {
 	//YM2612 MAME implementation, Thrown drunkenly into a class and converted to C# by Landon Podbielski.
 	//All code work is by the fellows below.

@@ -13,8 +13,6 @@ namespace Asmo.Sound
 
     public class ChipTunePlayer
     {
-        public bool DebugEnabled { get; set; } = true;
-
         private ISoundOut _soundOut;
         private IWaveSource _waveSource;
         private readonly ConcurrentQueue<IWaveSource> _oneShotQueue = new();
@@ -209,69 +207,50 @@ namespace Asmo.Sound
         }
 
         private ISampleSource _currentVgm;
-        private VgmSampleSource _vgmSource;
+        //private VgmSampleSource _vgmSource;
 
         // Play a VGM file
         public void PlayVgm(string vgmPath)
         {
-            try
+            StopVgm();
+            //_vgmSource = new VgmSampleSource(vgmPath);
+            //_currentVgm = _vgmSource;
+            Console.WriteLine($"Playing VGM: {vgmPath}");
+            
+            _mixer.AddSource(new SampleToWaveSource(_currentVgm));
+            Console.WriteLine("VGM added to mixer.");
+            if (_soundOut == null)
             {
-                 Console.WriteLine($"[ChipTunePlayer] PlayVgm called: {vgmPath}");
-                StopVgm();
-                _vgmSource = new VgmSampleSource(vgmPath);
-                _currentVgm = _vgmSource;
-                 Console.WriteLine($"[ChipTunePlayer] VGM source created.");
-                _mixer.AddSource(new SampleToWaveSource(_currentVgm));
-                 Console.WriteLine("[ChipTunePlayer] VGM added to mixer.");
-                if (_soundOut == null)
-                {
-                    _soundOut = new WasapiOut();
-                    _soundOut.Initialize(_mixer);
-                     Console.WriteLine("[ChipTunePlayer] SoundOut initialized.");
-                }
-                _soundOut.Play();
-                 Console.WriteLine("[ChipTunePlayer] Playback started.");
+                _soundOut = new WasapiOut();
+                _soundOut.Initialize(_mixer);
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ChipTunePlayer] Error playing VGM: {ex}");
-            }
+            Console.WriteLine("SoundOut initialized.");
+            _soundOut.Play();
         }
 
         // Stop VGM playback
         public void StopVgm()
         {
-            if (DebugEnabled) Console.WriteLine("[ChipTunePlayer] StopVgm called.");
             _currentVgm?.Dispose();
             _currentVgm = null;
-            _vgmSource = null;
+            //_vgmSource = null;
             // Optionally clear mixer or stop soundOut
         }
 
         // Pause VGM playback
         public void PauseVgm()
         {
-            if (DebugEnabled) Console.WriteLine("[ChipTunePlayer] PauseVgm called.");
             _soundOut?.Pause();
         }
 
         // Resume VGM playback
         public void ResumeVgm()
         {
-            if (DebugEnabled) Console.WriteLine("[ChipTunePlayer] ResumeVgm called.");
             _soundOut?.Play();
         }
 
         // Query if VGM is playing
-        public bool IsVgmPlaying
-        {
-            get
-            {
-                bool playing = _soundOut?.PlaybackState == PlaybackState.Playing && _currentVgm != null;
-                if (DebugEnabled) Console.WriteLine($"[ChipTunePlayer] IsVgmPlaying: {playing}");
-                return playing;
-            }
-        }
+        public bool IsVgmPlaying => _soundOut?.PlaybackState == PlaybackState.Playing && _currentVgm != null;
     }
 
     public class SampleToWaveSource : IWaveSource

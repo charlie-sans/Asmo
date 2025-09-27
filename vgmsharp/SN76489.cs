@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Globalization;
-using System.IO;
-
+﻿
 //Code is ported from Shiru's AS3 VGM player http://shiru.untergrund.net/
 namespace Megadrive
 {

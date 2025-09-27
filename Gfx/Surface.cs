@@ -1,4 +1,5 @@
 using Asmo.Types;
+using OpenTK.Windowing.Desktop;
 
 namespace Asmo.Gfx
 {
@@ -6,6 +7,12 @@ namespace Asmo.Gfx
     {
         public int Width { get; }
         public int Height { get; }
+    // left null for now
+    public GLFWGraphicsContext Context { get; set; }
+    /// <summary>
+    /// Reference to the owning window, if any.
+    /// </summary>
+    public Asmo.Window.Window Window { get; set; }
         public Color[][] Pixels { get; }
 
         public Surface(int width, int height)
@@ -25,13 +32,15 @@ namespace Asmo.Gfx
         {
             for (int i = 0; i < text.Length; i++)
             {
-                int px = x + i * 6; // Assuming 5x7 font with 1 pixel spacing
+                int px = x + i * 6;
+                char c = text[i];
+                if (!Font.Font5x7Map.TryGetValue(c, out var glyph))
+                    continue; // skip unknown chars
                 for (int fx = 0; fx < 5; fx++)
                     for (int fy = 0; fy < 7; fy++)
                     {
-                        // Flip fy so font is right-side up
-                        if (Font.Font5x7[(int)text[i], fx, fy])
-                            SetPixel(px + fx, y + (6 - fy), color);
+                        if (glyph[fx, fy])
+                            SetPixel(px + fx, y + fy, color);
                     }
             }
         }   
@@ -60,9 +69,17 @@ namespace Asmo.Gfx
             for (int sx = 0; sx < sprite.Width; sx++)
                 for (int sy = 0; sy < sprite.Height; sy++)
                 {
-                    var c = sprite.Pixels[sx][sy];
-                    if (c.A > 0) // Only draw non-transparent
-                        SetPixel(x + sx, y + sy, c);
+                    if (sx < sprite.Pixels.Length && sy < sprite.Pixels[sx].Length)
+                    {
+                        var c = sprite.Pixels[sx][sy];
+                        if (c.A > 0)
+                            SetPixel(x + sx, y + sy, c);
+                    }
+                    else
+                    {
+                        //// Log or break here to see what's wrong
+                        //Console.WriteLine($"Out of bounds: sx={sx}, sy={sy}");
+                    }
                 }
         }
     }

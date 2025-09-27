@@ -14,13 +14,23 @@ namespace Asmo.Window
 {
     public class Window : GameWindow
     {
+        private bool gameLoaded = false;
         private int _texture;
         private int _shaderProgram;
         private int _vao, _vbo;
-        private int _width = 128, _height = 128; // 2x bigger pixels
+        private int _width = 384, _height = 256; // 2x bigger pixels
         private Surface framebuffer;
         private ConsoleHost consoleHost;
         
+        /// <summary>
+        /// Gets the width of the frame buffer in pixels.
+        /// </summary>
+        public int FrameBufferX => _width;
+        /// <summary>
+        /// Gets the height of the frame buffer in pixels.
+        /// </summary>
+        public int FrameBufferY => _height;
+
         public Window() : base(GameWindowSettings.Default, NativeWindowSettings.Default) { }
         protected override void OnClosing(CancelEventArgs e)
         {
@@ -72,7 +82,13 @@ namespace Asmo.Window
 
             // Initialize framebuffer and console host
             framebuffer = new Surface(_width, _height);
+            framebuffer.Window = this;
             consoleHost = new ConsoleHost();
+            // Set the window title
+            Title = "Asmo Game Console ";
+            // set the window size
+            Size = new Vector2i((int)(_width * 2.5), _height * 2);
+            GL.Viewport(0, 0, (int)(_width * 1.5), Size.Y * -1);
         }
 
         public void Render(Surface surface, int x, int y)
@@ -97,7 +113,9 @@ namespace Asmo.Window
             // Copy pixels into the buffer at (x, y)
             for (int py = 0; py < ph; py++)
             {
-                int dy = y + py;
+                // Flip Y: OpenGL expects (0,0) at bottom-left, Surface is top-left
+                int flippedY = ph - 1 - py;
+                int dy = y + flippedY;
                 if (dy < 0 || dy >= _height) continue;
                 for (int px = 0; px < pw; px++)
                 {
@@ -118,21 +136,46 @@ namespace Asmo.Window
         protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
             base.OnRenderFrame(args);
-            GL.Clear(ClearBufferMask.ColorBufferBit);
+
+            GL.Clear(ClearBufferMask.ColorBufferBit);// --- FNA framework update ---
+            try
+            {
+                Microsoft.Xna.Framework.FrameworkDispatcher.Update();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"FrameworkDispatcher error: {ex.Message}");
+            }
             GL.UseProgram(_shaderProgram);
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, _texture);
             GL.BindVertexArray(_vao);
             GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, 0);
             SwapBuffers();
+
         }
 
         protected override void OnUpdateFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
             base.OnUpdateFrame(args);
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
-            consoleHost.Update(args.Time);
-            consoleHost.Draw(framebuffer);
+            if (!gameLoaded)
+            {
+                string msg = "Drop a game DLL, ZIP, or folder to start!";
+                string msg2 = "Asmo Game Console :3";
+                int textX = (framebuffer.Width - msg.Length * 6) / 2;
+                int textY = framebuffer.Height / 2 - 8;
+                int textX2 = (framebuffer.Width - msg2.Length * 6) / 2;
+                int textY2 = framebuffer.Height / 2 -64;
+                framebuffer.DrawText(textX, textY, msg, new Color(255,255,255,255));
+                framebuffer.DrawText(textX2, textY2, msg2, new Color(255, 5, 255, 128));
+
+            }
+            else
+            {
+                consoleHost.Update(args.Time);
+                consoleHost.Draw(framebuffer);
+            }
             Render(framebuffer, 0, 0);
         }
         
@@ -170,7 +213,9 @@ namespace Asmo.Window
                     if (gameType != null)
                     {
                         var game = (IConsoleGame)Activator.CreateInstance(gameType)!;
+                        framebuffer.Window = this;
                         consoleHost.LoadGame(game, framebuffer);
+                        gameLoaded = true;
                     }
                     continue;
                 }
@@ -195,7 +240,9 @@ namespace Asmo.Window
                             {
                                 GameEnvironment.AssetRoot = rootDir;
                                 var game = (IConsoleGame)Activator.CreateInstance(gameType)!;
+                                framebuffer.Window = this;
                                 consoleHost.LoadGame(game, framebuffer);
+                                gameLoaded = true;
                                 break;
                             }
                         }
