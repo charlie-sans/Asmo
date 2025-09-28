@@ -9,6 +9,7 @@ using Asmo.Gfx;
 using System.ComponentModel;
 using System.IO.Compression;
 using Asmo;
+using Asmo.Window.HomeScreen;
 
 namespace Asmo.Window
 {
@@ -21,7 +22,8 @@ namespace Asmo.Window
         private int _width = 384, _height = 256; // 2x bigger pixels
         private Surface framebuffer;
         private ConsoleHost consoleHost;
-        
+        private HomeScreenDisplay display = new HomeScreenDisplay();
+
         /// <summary>
         /// Gets the width of the frame buffer in pixels.
         /// </summary>
@@ -78,17 +80,18 @@ namespace Asmo.Window
             GL.BindVertexArray(0);
 
             // Load shaders
-            _shaderProgram = CreateShaderProgram("Window/shader.vert", "Window/shader.frag");
+            _shaderProgram = CreateShaderProgram("Window/Shaders/shader.vert", "Window/Shaders/shader.frag");
 
             // Initialize framebuffer and console host
             framebuffer = new Surface(_width, _height);
             framebuffer.Window = this;
             consoleHost = new ConsoleHost();
             // Set the window title
-            Title = "Asmo Game Console ";
+            Title = "Asmo Game Console";
             // set the window size
             Size = new Vector2i((int)(_width * 2.5), _height * 2);
             GL.Viewport(0, 0, (int)(_width * 1.5), Size.Y * -1);
+           
         }
 
         public void Render(Surface surface, int x, int y)
@@ -138,14 +141,7 @@ namespace Asmo.Window
             base.OnRenderFrame(args);
 
             GL.Clear(ClearBufferMask.ColorBufferBit);// --- FNA framework update ---
-            try
-            {
-                Microsoft.Xna.Framework.FrameworkDispatcher.Update();
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"FrameworkDispatcher error: {ex.Message}");
-            }
+         
             GL.UseProgram(_shaderProgram);
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, _texture);
@@ -161,15 +157,7 @@ namespace Asmo.Window
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
-                string msg = "Drop a game DLL, ZIP, or folder to start!";
-                string msg2 = "Asmo Game Console :3";
-                int textX = (framebuffer.Width - msg.Length * 6) / 2;
-                int textY = framebuffer.Height / 2 - 8;
-                int textX2 = (framebuffer.Width - msg2.Length * 6) / 2;
-                int textY2 = framebuffer.Height / 2 -64;
-                framebuffer.DrawText(textX, textY, msg, new Color(255,255,255,255));
-                framebuffer.DrawText(textX2, textY2, msg2, new Color(255, 5, 255, 128));
-
+                display.RenderHomeScreen(args,framebuffer);
             }
             else
             {
@@ -250,6 +238,9 @@ namespace Asmo.Window
                     }
                 }
             }
+            GameEnvironment.WindowX = FrameBufferY;
+            GameEnvironment.WindowY = FrameBufferY;
+            GameEnvironment.WindowTitle = Title;
         }
 
         private int CreateShaderProgram(string vertPath, string fragPath)

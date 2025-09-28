@@ -69,7 +69,10 @@ namespace AstroTestGame
         enum GameState { StartScreen, Playing, GameOver }
         GameState gameState = GameState.StartScreen;
         int highScore = 0;
-                WasapiOut soundOut = new WasapiOut(); 
+        WasapiOut soundOut = new WasapiOut(); 
+        // Prevent instant restart on GameOver
+        bool canRestart = false;
+
         public Game()
         {
             _player = new ChipTunePlayer();
@@ -93,7 +96,7 @@ namespace AstroTestGame
 
                 // Initialize with the wave source
                 soundOut.Initialize(factory);
-                soundOut.Volume = 0.5f;
+                soundOut.Volume = 0.2f;
                 // Play the file
                 soundOut.Play();
 
@@ -125,14 +128,30 @@ namespace AstroTestGame
                     }
                     return;
                 case GameState.GameOver:
-                    if (kb.IsKeyPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter))
+                    // Only allow restart if Enter was released after GameOver
+                    if (!kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter))
                     {
-                        gameState = GameState.StartScreen;
+                        canRestart = true;
+                    }
+                    else if (canRestart && kb.IsKeyPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter))
+                    {
+                        // Immediately start a new game (skip menu)
+                        score = 0; timeLeft = 30f; combo = 0; comboTimer = 0;
+                        playerX = 150; playerY = 100; dvdBoxX = 10; dvdBoxY = 10;
+                        powerUpActive = false; powerUpEffectActive = false; playerSpeed = normalPlayerSpeed;
+                        shakeTimer = 0; shakeAmount = 0;
+                        gameState = GameState.Playing;
+                        canRestart = false;
                     }
                     return;
                 case GameState.Playing:
                     break;
             }
+
+            // Only run gameplay logic if Playing
+            if (gameState != GameState.Playing)
+                return;
+
             // Timer (decrement by elapsed seconds)
             timeLeft -= (float)deltaTime;
             if (timeLeft <= 0f)
@@ -140,6 +159,7 @@ namespace AstroTestGame
                 if (score > highScore) highScore = score;
                 gameState = GameState.GameOver;
                 timeLeft = 0f;
+                canRestart = false;
                 return;
             }
             // Player movement
@@ -251,7 +271,7 @@ namespace AstroTestGame
             // Score
             surface.DrawText(10 + shakeX, 30 + shakeY, $"Score: {score}", Asmo.Gfx.Colors.Yellow);
             // Timer
-            surface.DrawText(10 + shakeX, 10 + shakeY, $"Time: {MathF.Ceiling(timeLeft)}", Asmo.Gfx.Colors.White);
+            surface.DrawText(10 + shakeX, 50 + shakeY, $"Time: {MathF.Ceiling(timeLeft)}", Asmo.Gfx.Colors.White);
             // Combo
             if (combo > 1)
                 surface.DrawText(10 + shakeX, 65 + shakeY, $"Combo: {combo}x!", Asmo.Gfx.Colors.Cyan);
@@ -274,7 +294,7 @@ namespace AstroTestGame
             }
         }
         // Helper to get surface size in Update
-        int surfaceWidth => 384;
-        int surfaceHeight => 256;
+        int surfaceWidth => GameEnvironment.WindowX;
+        int surfaceHeight => GameEnvironment.WindowY;
     }
 }
