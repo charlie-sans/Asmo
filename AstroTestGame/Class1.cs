@@ -77,15 +77,41 @@ namespace AstroTestGame
         {
             _player = new ChipTunePlayer();
             _player.BasePitch = 440f; // A4
-
         }
+
         public void Init(Asmo.Gfx.Surface surface)
         {
-          
+            Console.WriteLine("=== AstroTestGame Init ===");
+            Console.WriteLine($"Surface type: {surface.GetType().Name}");
+            Console.WriteLine($"Surface size: {surface.Width}x{surface.Height}");
+            
+            if (surface.Window != null)
+            {
+                Console.WriteLine($"Window size: {surface.Window.Settings.Width}x{surface.Window.Settings.Height}");
+                Console.WriteLine($"Graphics quality: {surface.Window.GraphicsConfig.Quality}");
+                
+                // Check if we have enhanced features
+                if (surface.IsEnhanced())
+                {
+                    Console.WriteLine("Enhanced surface features available!");
+                    Console.WriteLine(surface.GetFeatureSummary());
+                    
+                    // Demonstrate enhanced features by loading a simple test image if available
+                    surface.WithEnhanced(enhanced =>
+                    {
+                        Console.WriteLine("Testing enhanced features...");
+                        // You could load test assets here
+                    });
+                }
+                else
+                {
+                    Console.WriteLine("Using basic surface (retro mode)");
+                }
+            }
+            
             kb = new Keyboard(surface.Window);
             try
             {
-
                 //var vgmSource = new Megadrive.VGMSong(Path.Join(GameEnvironment.AssetRoot, "Assets/Sound/demooldd.vgm"));
                 //vgmSource.Play();
 
@@ -99,13 +125,13 @@ namespace AstroTestGame
                 soundOut.Volume = 0.2f;
                 // Play the file
                 soundOut.Play();
-
-
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Error initializing audio: " + ex.Message);
             }
+            
+            Console.WriteLine("Game initialization complete!");
         }
             
         public void Update(double deltaTime)
@@ -125,6 +151,7 @@ namespace AstroTestGame
                         powerUpActive = false; powerUpEffectActive = false; playerSpeed = normalPlayerSpeed;
                         shakeTimer = 0; shakeAmount = 0;
                         gameState = GameState.Playing;
+                        Console.WriteLine("Game started!");
                     }
                     return;
                 case GameState.GameOver:
@@ -142,6 +169,7 @@ namespace AstroTestGame
                         shakeTimer = 0; shakeAmount = 0;
                         gameState = GameState.Playing;
                         canRestart = false;
+                        Console.WriteLine("Game restarted!");
                     }
                     return;
                 case GameState.Playing:
@@ -160,6 +188,7 @@ namespace AstroTestGame
                 gameState = GameState.GameOver;
                 timeLeft = 0f;
                 canRestart = false;
+                Console.WriteLine($"Game Over! Final score: {score}");
                 return;
             }
             // Player movement
@@ -168,23 +197,23 @@ namespace AstroTestGame
             if (kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.W)) playerY -= playerSpeed;
             if (kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.S)) playerY += playerSpeed;
             // Clamp player to screen
-            playerX = Math.Clamp(playerX, 0, surfaceWidth - playerW);
-            playerY = Math.Clamp(playerY, 0, surfaceHeight - playerH);
+            playerX = Math.Clamp(playerX, 0, GameEnvironment.WindowX - playerW);
+            playerY = Math.Clamp(playerY, 0, GameEnvironment.WindowY - playerH);
 
             // DVD logo box movement
             dvdBoxX += dvdBoxVX;
             dvdBoxY += dvdBoxVY;
             // Bounce off edges
-            if (dvdBoxX <= 0 || dvdBoxX + dvdBoxW >=  surfaceWidth)
+            if (dvdBoxX <= 0 || dvdBoxX + dvdBoxW >= GameEnvironment.WindowX)
                 dvdBoxVX = -dvdBoxVX;
-            if (dvdBoxY <= 0 || dvdBoxY + dvdBoxH >= surfaceHeight)
+            if (dvdBoxY <= 0 || dvdBoxY + dvdBoxH >= GameEnvironment.WindowY)
                 dvdBoxVY = -dvdBoxVY;
 
             // Power-up spawn logic
             if (!powerUpActive && rand.Next(0, 300) == 0) // ~every 5 seconds
             {
-                powerUpX = rand.Next(surfaceWidth - powerUpW);
-                powerUpY = rand.Next(surfaceHeight - powerUpH);
+                powerUpX = rand.Next(GameEnvironment.WindowX - powerUpW);
+                powerUpY = rand.Next(GameEnvironment.WindowY - powerUpH);
                 powerUpActive = true;
                 powerUpTimer = 180;
             }
@@ -228,8 +257,8 @@ namespace AstroTestGame
                 score++;
                 combo++;
                 comboTimer = comboTimeout;
-                dvdBoxX = rand.Next(surfaceWidth - dvdBoxW);
-                dvdBoxY = rand.Next(surfaceHeight - dvdBoxH);
+                dvdBoxX = rand.Next(GameEnvironment.WindowX - dvdBoxW);
+                dvdBoxY = rand.Next(GameEnvironment.WindowY - dvdBoxH);
                 shakeTimer = 8; shakeAmount = 3;
             }
             // Combo timer
@@ -242,57 +271,91 @@ namespace AstroTestGame
             if (shakeTimer > 0) shakeTimer--;
             _player.UpdateMixer();
         }
+
         public void Draw(Asmo.Gfx.Surface surface)
         {
+            // Debug: Print draw call info occasionally
+            if (i++ % 60 == 0) // Every 60 frames
+            {
+                Console.WriteLine($"Draw called - Surface: {surface.Width}x{surface.Height}, State: {gameState}");
+            }
+
             int shakeX = 0, shakeY = 0;
             if (shakeTimer > 0)
             {
                 shakeX = rand.Next(-shakeAmount, shakeAmount + 1);
                 shakeY = rand.Next(-shakeAmount, shakeAmount + 1);
             }
+            
+            // Clear the surface with dark green
             surface.Clear(Asmo.Gfx.Colors.DarkGreen);
+            
             if (gameState == GameState.StartScreen)
             {
                 surface.DrawText(surface.Width / 2 - 60, surface.Height / 2 - 30, "ASTRO TEST GAME", Asmo.Gfx.Colors.Yellow);
                 surface.DrawText(surface.Width / 2 - 50, surface.Height / 2 - 10, $"High Score: {highScore}", Asmo.Gfx.Colors.Cyan);
                 surface.DrawText(surface.Width / 2 - 70, surface.Height / 2 + 10, "Press Enter to Start", Asmo.Gfx.Colors.White);
+                
+                // Show surface info on start screen - position at top
+                if (surface.IsEnhanced())
+                {
+                    surface.DrawText(10, surface.Height - 30, "Enhanced Graphics Mode", Asmo.Gfx.Colors.Green);
+                    surface.DrawText(10, surface.Height - 20, surface.GetFeatureSummary(), Asmo.Gfx.Colors.White);
+                }
+                else
+                {
+                    surface.DrawText(10, surface.Height - 30, "Retro Graphics Mode", Asmo.Gfx.Colors.Yellow);
+                }
+                
+                // Add a simple test rectangle to ensure drawing works
+                surface.DrawRect(10, 10, 50, 20, Asmo.Gfx.Colors.Red);
+                surface.DrawText(15, 15, "TEST", Asmo.Gfx.Colors.White);
+                
                 return;
             }
+            
             if (gameState == GameState.GameOver)
             {
                 surface.DrawText(surface.Width / 2 - 50 + shakeX, surface.Height / 2 - 20 + shakeY, "GAME OVER", Asmo.Gfx.Colors.Red);
                 surface.DrawText(surface.Width / 2 - 60 + shakeX, surface.Height / 2 + 0 + shakeY, $"Final Score: {score}", Asmo.Gfx.Colors.Yellow);
                 surface.DrawText(surface.Width / 2 - 60 + shakeX, surface.Height / 2 + 20 + shakeY, $"High Score: {highScore}", Asmo.Gfx.Colors.Cyan);
-                surface.DrawText(surface.Width / 2 - 70 + shakeX, surface.Height / 2 + 40 + shakeY, "Press Enter for Menu", Asmo.Gfx.Colors.White);
+                surface.DrawText(surface.Width / 2 - 70 + shakeX, surface.Height / 2 + 40 + shakeY, "Press Enter to Restart", Asmo.Gfx.Colors.White);
                 return;
             }
-            // Instructions
-            surface.DrawText(10 + shakeX, 40 + shakeY, "Arrow keys: Move | Touch DVD logo! | Grab power-ups!", Asmo.Gfx.Colors.White);
-            // Score
-            surface.DrawText(10 + shakeX, 30 + shakeY, $"Score: {score}", Asmo.Gfx.Colors.Yellow);
+            
+            // Game playing state
+            // Instructions - position at bottom
+            surface.DrawText(10 + shakeX, 40 + shakeY, "WASD: Move | Touch DVD logo! | Grab power-ups!", Asmo.Gfx.Colors.White);
+            // Score - position at top
+            surface.DrawText(10 + shakeX, surface.Height - 30 + shakeY, $"Score: {score}", Asmo.Gfx.Colors.Yellow);
             // Timer
-            surface.DrawText(10 + shakeX, 50 + shakeY, $"Time: {MathF.Ceiling(timeLeft)}", Asmo.Gfx.Colors.White);
+            surface.DrawText(10 + shakeX, surface.Height - 20 + shakeY, $"Time: {MathF.Ceiling(timeLeft)}", Asmo.Gfx.Colors.White);
             // Combo
             if (combo > 1)
-                surface.DrawText(10 + shakeX, 65 + shakeY, $"Combo: {combo}x!", Asmo.Gfx.Colors.Cyan);
+                surface.DrawText(10 + shakeX, surface.Height - 10 + shakeY, $"Combo: {combo}x!", Asmo.Gfx.Colors.Cyan);
+                
             // DVD logo box
             surface.DrawRect(dvdBoxX + shakeX, dvdBoxY + shakeY, dvdBoxW, dvdBoxH, dvdBoxColor);
             surface.DrawSprite(disk, dvdBoxX + 5 + shakeX, dvdBoxY + 5 + shakeY);
             surface.DrawText(dvdBoxX + 10 + shakeX, dvdBoxY + dvdBoxH / 2 - 4 + shakeY, "DVD", Asmo.Gfx.Colors.Black);
+            
             // Player
             surface.DrawRect(playerX + shakeX, playerY + shakeY, playerW, playerH, playerColor);
+            
             // Power-up
             if (powerUpActive)
             {
                 surface.DrawRect(powerUpX + shakeX, powerUpY + shakeY, powerUpW, powerUpH, Asmo.Gfx.Colors.Magenta);
                 surface.DrawText(powerUpX - 2 + shakeX, powerUpY - 10 + shakeY, "P", Asmo.Gfx.Colors.White);
             }
+            
             // Power-up effect indicator
             if (powerUpEffectActive)
             {
-                surface.DrawText(10 + shakeX, 50 + shakeY, "Speed Boost!", Asmo.Gfx.Colors.Magenta);
+                surface.DrawText(10 + shakeX, 20 + shakeY, "Speed Boost!", Asmo.Gfx.Colors.Magenta);
             }
         }
+
         // Helper to get surface size in Update
         int surfaceWidth => GameEnvironment.WindowX;
         int surfaceHeight => GameEnvironment.WindowY;

@@ -3,7 +3,7 @@ using OpenTK.Windowing.Desktop;
 
 namespace Asmo.Gfx
 {
-    public class Surface
+    public class Surface : IDisposable
     {
         public int Width { get; }
         public int Height { get; }
@@ -46,8 +46,10 @@ namespace Asmo.Gfx
         }   
         public void SetPixel(int x, int y, Color color)
         {
-            if (x >= 0 && x < Width && y >= 0 && y < Height)
-                Pixels[x][y] = color;
+            // Convert from OpenGL coordinates (bottom-left) to array coordinates (top-left)
+            int arrayY = Height - 1 - y;
+            if (x >= 0 && x < Width && arrayY >= 0 && arrayY < Height)
+                Pixels[x][arrayY] = color;
         }
 
         public void Clear(Color color)
@@ -163,6 +165,15 @@ namespace Asmo.Gfx
                     px -= twory2;
                 }
             }
+        }
+
+        /// <summary>
+        /// Dispose of resources (virtual for overriding in enhanced surface)
+        /// </summary>
+        public virtual void Dispose()
+        {
+            // Base implementation doesn't need cleanup
+            // EnhancedSurface will override this
         }
     }
 

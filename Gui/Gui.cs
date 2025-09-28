@@ -17,7 +17,7 @@ namespace Asmo.Gui
         public static void Label(Surface surface, string text, Color color)
         {
             surface.DrawText(cursorX, cursorY, text, color);
-            cursorY += spacingY;
+            cursorY -= spacingY; // Move DOWN in OpenGL coordinates (decrease Y)
         }
 
         public static bool Button(Surface surface, string text, Color color, int mouseX, int mouseY, bool mouseDown)
@@ -28,7 +28,7 @@ namespace Asmo.Gui
             surface.DrawText(cursorX + 4, cursorY + 4, text, color);
             bool hovered = mouseX >= cursorX && mouseX < cursorX + w && mouseY >= cursorY && mouseY < cursorY + h;
             bool clicked = hovered && mouseDown;
-            cursorY += spacingY;
+            cursorY -= spacingY; // Move DOWN in OpenGL coordinates (decrease Y)
             return clicked;
         }
 
@@ -42,13 +42,13 @@ namespace Asmo.Gui
             bool hovered = mouseX >= cursorX && mouseX < cursorX + boxSize && mouseY >= cursorY && mouseY < cursorY + boxSize;
             bool clicked = hovered && mouseDown;
             if (clicked) value = !value;
-            cursorY += spacingY;
+            cursorY -= spacingY; // Move DOWN in OpenGL coordinates (decrease Y)
             return clicked;
         }
 
         public static void NextLine(int pixels = 0)
         {
-            cursorY += pixels > 0 ? pixels : spacingY;
+            cursorY -= pixels > 0 ? pixels : spacingY; // Move DOWN in OpenGL coordinates (decrease Y)
         }
     }
 }
