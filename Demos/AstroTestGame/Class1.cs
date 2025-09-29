@@ -72,6 +72,16 @@ namespace AstroTestGame
         public void Init(Surface surface)
         {
             kb = new Keyboard(surface.Window);
+            // Enable audio diagnostics and logging
+            _audio = new AudioEngine();
+            AudioEngine.DiagnosticsEnabled = true;
+            var logPath = Path.Combine(AppContext.BaseDirectory, "astro-audio.log");
+            var logEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            AudioEngine.DiagnosticsSink = msg =>
+            {
+                Console.WriteLine(msg);
+                File.AppendAllText(logPath, msg + Environment.NewLine, logEncoding);
+            };
             InitialiseAudio();
         }
 
