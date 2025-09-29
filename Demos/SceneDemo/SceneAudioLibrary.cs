@@ -6,12 +6,14 @@ namespace SceneDemo
     {
         public SceneAudioLibrary()
         {
+            SceneDiagnostics.Log("Initializing SceneAudioLibrary clips.");
             MenuForward = AudioClip.CreateSquare(880, 0.12, 0.35f);
             MenuBack = AudioClip.CreateSquare(440, 0.1, 0.3f);
             PauseToggle = AudioClip.CreateNoise(0.15, 0.18f);
             AmbientLoop = AudioClip.CreateSine(220, 3.2, 0.18f);
             Bounce = AudioClip.CreateSquare(660, 0.08, 0.28f);
             Collect = AudioClip.CreateSquare(1320, 0.1, 0.4f);
+            SceneDiagnostics.Log("SceneAudioLibrary clips ready.");
         }
 
         public AudioClip MenuForward { get; }

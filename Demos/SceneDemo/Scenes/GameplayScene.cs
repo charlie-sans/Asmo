@@ -38,9 +38,22 @@ namespace SceneDemo.Scenes
             if (context.TryGetService<AudioEngine>(out var audio))
             {
                 _sfxBus = audio!.GetOrCreateBus("sfx");
+                SceneDiagnostics.Log("GameplayScene acquired SFX bus.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("GameplayScene failed to resolve AudioEngine service.");
             }
 
             context.TryGetService<SceneAudioLibrary>(out _audioLibrary);
+            if (_audioLibrary != null)
+            {
+                SceneDiagnostics.Log("GameplayScene received SceneAudioLibrary.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("GameplayScene missing SceneAudioLibrary service.");
+            }
             _bounceCooldown = 0;
         }
 
@@ -130,16 +143,23 @@ namespace SceneDemo.Scenes
         private void PlaySfx(AudioClip? clip, float volume = 0.5f, double minInterval = 0.0)
         {
             if (clip == null || _sfxBus == null)
+            {
+                SceneDiagnostics.Log("GameplayScene cannot play SFX (missing clip or bus).");
                 return;
+            }
 
             if (minInterval > 0 && _bounceCooldown > 0)
+            {
+                SceneDiagnostics.Log("GameplayScene skipped SFX due to cooldown.");
                 return;
+            }
 
             _sfxBus.Play(clip, new AudioPlaybackSettings
             {
                 Volume = volume,
                 FadeInSeconds = 0.005
             });
+            SceneDiagnostics.Log($"GameplayScene played SFX (volume={volume:0.00}).");
 
             if (minInterval > 0)
             {

@@ -130,8 +130,19 @@ namespace Asmo.Audio
                             {
                                 finishedInstances ??= new List<AudioInstance>();
                                 finishedInstances.Add(instance);
+                                AudioDiagnostics.Log($"Bus '{Name}' instance produced no samples (read=0, volume={instance.Volume:0.00}).");
                                 continue;
                             }
+
+                            float localMin = float.MaxValue;
+                            float localMax = float.MinValue;
+                            for (int i = 0; i < read; i++)
+                            {
+                                float s = scratch[i];
+                                if (s < localMin) localMin = s;
+                                if (s > localMax) localMax = s;
+                            }
+                            AudioDiagnostics.Log($"Bus '{Name}' mixing {read} samples (busVol={busVolume:0.00}, instVol={instance.Volume:0.00}, pan={instance.Pan:0.00}, min={localMin:0.0000}, max={localMax:0.0000}).");
 
                             Accumulate(destination, offset, scratch, read, channels, busVolume * instance.Volume, Math.Clamp(busPan + instance.Pan, -1f, 1f));
                         }

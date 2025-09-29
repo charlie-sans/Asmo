@@ -1,15 +1,18 @@
 using System;
+using System.Threading;
 
 namespace Asmo.Audio
 {
     internal sealed class AudioInstance
     {
-        private readonly AudioClip _clip;
-        private int _samplePosition;
-        private bool _isPlaying = true;
-        private float _baseVolume;
-        private float _targetVolume;
-        private float _fadeStartVolume;
+    private readonly AudioClip _clip;
+    private int _samplePosition;
+    private bool _isPlaying = true;
+    private float _volume;
+    private float _pan;
+    private float _baseVolume;
+    private float _targetVolume;
+    private float _fadeStartVolume;
         private double _fadeTimeRemaining;
         private double _fadeDuration;
         private bool _loggedStop;
@@ -27,13 +30,24 @@ namespace Asmo.Audio
         }
 
         public bool Loop { get; }
-        public float Volume { get; private set; }
-        public float Pan { get; private set; }
-        public bool IsPlaying => _isPlaying;
+
+        public float Volume
+        {
+            get => Volatile.Read(ref _volume);
+            private set => Volatile.Write(ref _volume, value);
+        }
+
+        public float Pan
+        {
+            get => Volatile.Read(ref _pan);
+            private set => Volatile.Write(ref _pan, value);
+        }
+
+        public bool IsPlaying => Volatile.Read(ref _isPlaying);
 
         public void Stop()
         {
-            _isPlaying = false;
+            Volatile.Write(ref _isPlaying, false);
             if (!_loggedStop)
             {
                 AudioDiagnostics.Log("Instance stopped.");
@@ -67,7 +81,7 @@ namespace Asmo.Audio
 
         public void Update(double deltaTime)
         {
-            if (!_isPlaying)
+            if (!IsPlaying)
                 return;
 
             if (_fadeTimeRemaining > 0)
@@ -86,7 +100,7 @@ namespace Asmo.Audio
 
         public int Read(float[] buffer, int offset, int count)
         {
-            if (!_isPlaying)
+            if (!IsPlaying)
             {
                 Array.Clear(buffer, offset, count);
                 return 0;
@@ -106,7 +120,7 @@ namespace Asmo.Audio
                     }
                     else
                     {
-                        _isPlaying = false;
+                        Volatile.Write(ref _isPlaying, false);
                         if (!_loggedStop)
                         {
                             AudioDiagnostics.Log("Instance reached end of clip.");
@@ -121,6 +135,23 @@ namespace Asmo.Audio
                 Array.Copy(_clip.SampleBuffer, _samplePosition, buffer, offset + samplesWritten, toCopy);
                 _samplePosition += toCopy;
                 samplesWritten += toCopy;
+            }
+
+            if (samplesWritten > 0)
+            {
+                float localMin = float.MaxValue;
+                float localMax = float.MinValue;
+                for (int i = 0; i < samplesWritten; i++)
+                {
+                    float s = buffer[offset + i];
+                    if (s < localMin) localMin = s;
+                    if (s > localMax) localMax = s;
+                }
+                AudioDiagnostics.Log($"Instance read {samplesWritten} samples (loop={Loop}, position={_samplePosition}, volume={Volume:0.00}, min={localMin:0.0000}, max={localMax:0.0000}).");
+            }
+            else
+            {
+                AudioDiagnostics.Log($"Instance read returned 0 samples (loop={Loop}, isPlaying={IsPlaying}, position={_samplePosition}, total={_clip.TotalSamples}).");
             }
 
             return samplesWritten;

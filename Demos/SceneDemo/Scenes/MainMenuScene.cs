@@ -24,9 +24,22 @@ namespace SceneDemo.Scenes
             if (context.TryGetService<AudioEngine>(out var audio))
             {
                 _sfxBus = audio!.GetOrCreateBus("sfx");
+                SceneDiagnostics.Log("MainMenuScene acquired SFX bus.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("MainMenuScene failed to resolve AudioEngine service.");
             }
 
             context.TryGetService<SceneAudioLibrary>(out _audioLibrary);
+            if (_audioLibrary != null)
+            {
+                SceneDiagnostics.Log("MainMenuScene received SceneAudioLibrary.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("MainMenuScene missing SceneAudioLibrary service.");
+            }
         }
 
         public override void Update(SceneContext context, double deltaTime)
@@ -58,13 +71,17 @@ namespace SceneDemo.Scenes
         private void PlayMenuSound(AudioClip? clip)
         {
             if (clip == null || _sfxBus == null)
+            {
+                SceneDiagnostics.Log("MainMenuScene cannot play menu sound (missing clip or bus).");
                 return;
+            }
 
             _sfxBus.Play(clip, new AudioPlaybackSettings
             {
                 Volume = 0.7f,
                 FadeInSeconds = 0.02
             });
+            SceneDiagnostics.Log("MainMenuScene played menu sound.");
         }
     }
 }

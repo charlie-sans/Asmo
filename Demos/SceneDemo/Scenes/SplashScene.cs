@@ -19,9 +19,22 @@ namespace SceneDemo.Scenes
             if (context.TryGetService<AudioEngine>(out var audio))
             {
                 _sfxBus = audio!.GetOrCreateBus("sfx");
+                SceneDiagnostics.Log("SplashScene acquired SFX bus.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("SplashScene failed to resolve AudioEngine service.");
             }
 
             context.TryGetService<SceneAudioLibrary>(out _audioLibrary);
+            if (_audioLibrary != null)
+            {
+                SceneDiagnostics.Log("SplashScene received SceneAudioLibrary.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("SplashScene missing SceneAudioLibrary service.");
+            }
         }
 
         public override void Update(SceneContext context, double deltaTime)
@@ -44,13 +57,17 @@ namespace SceneDemo.Scenes
         private void PlayForwardSound()
         {
             if (_sfxBus == null || _audioLibrary == null)
+            {
+                SceneDiagnostics.Log("SplashScene cannot play forward sound (missing bus or library).");
                 return;
+            }
 
             _sfxBus.Play(_audioLibrary.MenuForward, new AudioPlaybackSettings
             {
                 Volume = 0.6f,
                 FadeInSeconds = 0.02
             });
+            SceneDiagnostics.Log("SplashScene played forward sound.");
         }
     }
 }

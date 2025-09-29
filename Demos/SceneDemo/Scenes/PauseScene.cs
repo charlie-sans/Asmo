@@ -25,9 +25,22 @@ namespace SceneDemo.Scenes
             if (context.TryGetService<AudioEngine>(out var audio))
             {
                 _sfxBus = audio!.GetOrCreateBus("sfx");
+                SceneDiagnostics.Log("PauseScene acquired SFX bus.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("PauseScene failed to resolve AudioEngine service.");
             }
 
             context.TryGetService<SceneAudioLibrary>(out _audioLibrary);
+            if (_audioLibrary != null)
+            {
+                SceneDiagnostics.Log("PauseScene received SceneAudioLibrary.");
+            }
+            else
+            {
+                SceneDiagnostics.Log("PauseScene missing SceneAudioLibrary service.");
+            }
             PlayToggleSound();
         }
 
@@ -63,13 +76,17 @@ namespace SceneDemo.Scenes
         private void PlayToggleSound()
         {
             if (_sfxBus == null || _audioLibrary == null)
+            {
+                SceneDiagnostics.Log("PauseScene cannot play toggle sound (missing bus or library).");
                 return;
+            }
 
             _sfxBus.Play(_audioLibrary.PauseToggle, new AudioPlaybackSettings
             {
                 Volume = 0.35f,
                 FadeInSeconds = 0.01
             });
+            SceneDiagnostics.Log("PauseScene played toggle sound.");
         }
     }
 }
