@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Asmo/Asmo.csproj" />
+  <Project Path="Demos/AudioDemo/AudioDemo.csproj" />
   <Project Path="Demos/AstroConsole/AstroConsole.csproj" />
   <Project Path="Demos/AstrOS/AstrOS.csproj" />
   <Project Path="Demos/AstroTestGame/AstroTestGame.csproj" />

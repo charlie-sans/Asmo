@@ -1,28 +1,27 @@
 ﻿using Asmo;
-using Asmo.Sound;
-using Asmo.Window.input;
-using CSCore.SoundOut;
-using Megadrive;
-using Microsoft.Xna.Framework;
-using System;
-using System.Threading;
-using Asmo.Types;
+using Asmo.Audio;
 using Asmo.Gfx;
-using CSCore.Codecs;
-using CSCore;
+using Asmo.Types;
+using Asmo.Window.input;
+using System;
+using System.Collections.Generic;
+using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace AstroTestGame
 {
     public class Game : Asmo.Gfx.IConsoleGame
     {
     private Keyboard? kb = null;
-    private System.Collections.Generic.HashSet<OpenTK.Windowing.GraphicsLibraryFramework.Keys> prevKeysDown = new();
-        private System.Collections.Generic.List<string> outputLines = new System.Collections.Generic.List<string>();
+    private readonly HashSet<Keys> prevKeysDown = new();
+        private readonly List<string> outputLines = new();
         private string inputBuffer = "";
         private int maxLines = 20;
         private bool showCursor = true;
         private double cursorBlink = 0;
         private bool exitRequested = false;
+        private AudioEngine? _audio;
+        private AudioBus? _sfxBus;
+        private AudioClip? _keyClip;
 
         public Game() { }
 
@@ -33,43 +32,47 @@ namespace AstroTestGame
             inputBuffer = "";
             outputLines.Add("Simple GUI Terminal Emulator. Type 'help' for commands. Type 'exit' to quit.");
             exitRequested = false;
+            InitialiseAudio();
         }
 
         public void Update(double deltaTime)
         {
+            _audio?.Update(deltaTime);
             if (kb == null) return;
             // Handle key input for text entry
             bool shift = IsShiftDown();
-            var keysToCheck = new System.Collections.Generic.List<OpenTK.Windowing.GraphicsLibraryFramework.Keys>();
-            for (var k = OpenTK.Windowing.GraphicsLibraryFramework.Keys.A; k <= OpenTK.Windowing.GraphicsLibraryFramework.Keys.Z; k++)
+            var keysToCheck = new List<Keys>();
+            for (var k = Keys.A; k <= Keys.Z; k++)
                 keysToCheck.Add(k);
-            for (var k = OpenTK.Windowing.GraphicsLibraryFramework.Keys.D0; k <= OpenTK.Windowing.GraphicsLibraryFramework.Keys.D9; k++)
+            for (var k = Keys.D0; k <= Keys.D9; k++)
                 keysToCheck.Add(k);
             keysToCheck.AddRange(new[] {
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Space,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Period,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Comma,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Minus,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Equal,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Slash,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backslash,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Semicolon,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.Apostrophe,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.LeftBracket,
-                OpenTK.Windowing.GraphicsLibraryFramework.Keys.RightBracket
+                Keys.Space,
+                Keys.Period,
+                Keys.Comma,
+                Keys.Minus,
+                Keys.Equal,
+                Keys.Slash,
+                Keys.Backslash,
+                Keys.Semicolon,
+                Keys.Apostrophe,
+                Keys.LeftBracket,
+                Keys.RightBracket
             });
 
             // Enter
-            if (IsKeyJustPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter))
+            if (IsKeyJustPressed(Keys.Enter))
             {
                 ProcessCommand(inputBuffer);
                 inputBuffer = "";
+                PlayKeySound();
             }
             // Backspace
-            else if (IsKeyJustPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backspace))
+            else if (IsKeyJustPressed(Keys.Backspace))
             {
                 if (inputBuffer.Length > 0)
                     inputBuffer = inputBuffer.Substring(0, inputBuffer.Length - 1);
+                PlayKeySound();
             }
             else
             {
@@ -78,21 +81,24 @@ namespace AstroTestGame
                     if (IsKeyJustPressed(k) && inputBuffer.Length < 64)
                     {
                         char? ch = null;
-                        if (k >= OpenTK.Windowing.GraphicsLibraryFramework.Keys.A && k <= OpenTK.Windowing.GraphicsLibraryFramework.Keys.Z)
+                        if (k >= Keys.A && k <= Keys.Z)
                         {
-                            char c = (char)('a' + (k - OpenTK.Windowing.GraphicsLibraryFramework.Keys.A));
+                            char c = (char)('a' + (k - Keys.A));
                             ch = shift ? char.ToUpper(c) : c;
                         }
-                        else if (k >= OpenTK.Windowing.GraphicsLibraryFramework.Keys.D0 && k <= OpenTK.Windowing.GraphicsLibraryFramework.Keys.D9)
+                        else if (k >= Keys.D0 && k <= Keys.D9)
                         {
-                            ch = (char)('0' + (k - OpenTK.Windowing.GraphicsLibraryFramework.Keys.D0));
+                            ch = (char)('0' + (k - Keys.D0));
                         }
                         else
                         {
                             ch = KeyToChar(k, shift);
                         }
                         if (ch != null)
+                        {
                             inputBuffer += ch;
+                            PlayKeySound();
+                        }
                     }
                 }
             }
@@ -108,11 +114,11 @@ namespace AstroTestGame
             prevKeysDown.Clear();
             foreach (var k in keysToCheck)
                 if (kb.IsKeyDown(k)) prevKeysDown.Add(k);
-            if (kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter)) prevKeysDown.Add(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Enter);
-            if (kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backspace)) prevKeysDown.Add(OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backspace);
+            if (kb.IsKeyDown(Keys.Enter)) prevKeysDown.Add(Keys.Enter);
+            if (kb.IsKeyDown(Keys.Backspace)) prevKeysDown.Add(Keys.Backspace);
         }
         // Returns true if the key is down this frame but was not down last frame
-        private bool IsKeyJustPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys key)
+        private bool IsKeyJustPressed(Keys key)
         {
             if (kb == null) return false;
             return kb.IsKeyDown(key) && !prevKeysDown.Contains(key);
@@ -164,24 +170,25 @@ namespace AstroTestGame
             // Limit output lines
             if (outputLines.Count > 100)
                 outputLines.RemoveRange(0, outputLines.Count - 100);
+            PlayKeySound();
         }
 
         // Simple key-to-char mapping for symbols
-        private char? KeyToChar(OpenTK.Windowing.GraphicsLibraryFramework.Keys key, bool shift)
+        private char? KeyToChar(Keys key, bool shift)
         {
             switch (key)
             {
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Space: return ' ';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Period: return '.';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Comma: return ',';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Minus: return '-';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Equal: return '=';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Slash: return '/';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Backslash: return '\\';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Semicolon: return ';';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.Apostrophe: return '\'';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.LeftBracket: return '[';
-                case OpenTK.Windowing.GraphicsLibraryFramework.Keys.RightBracket: return ']';
+                case Keys.Space: return ' ';
+                case Keys.Period: return '.';
+                case Keys.Comma: return ',';
+                case Keys.Minus: return '-';
+                case Keys.Equal: return '=';
+                case Keys.Slash: return '/';
+                case Keys.Backslash: return '\\';
+                case Keys.Semicolon: return ';';
+                case Keys.Apostrophe: return '\'';
+                case Keys.LeftBracket: return '[';
+                case Keys.RightBracket: return ']';
             }
             return null;
         }
@@ -190,8 +197,28 @@ namespace AstroTestGame
         private bool IsShiftDown()
         {
             if (kb == null) return false;
-            return kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.LeftShift) ||
-                   kb.IsKeyDown(OpenTK.Windowing.GraphicsLibraryFramework.Keys.RightShift);
+            return kb.IsKeyDown(Keys.LeftShift) ||
+                   kb.IsKeyDown(Keys.RightShift);
+        }
+
+        private void InitialiseAudio()
+        {
+            _audio = new AudioEngine();
+            _sfxBus = _audio.GetOrCreateBus("sfx");
+            _sfxBus.Volume = 0.75f;
+            _keyClip = AudioClip.CreateSquare(980, 0.08, 0.25f);
+        }
+
+        private void PlayKeySound()
+        {
+            if (_sfxBus == null || _keyClip == null)
+                return;
+
+            _sfxBus.Play(_keyClip, new AudioPlaybackSettings
+            {
+                Volume = 0.5f,
+                FadeInSeconds = 0.005
+            });
         }
     }
 }

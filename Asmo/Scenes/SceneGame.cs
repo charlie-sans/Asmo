@@ -1,4 +1,5 @@
 using System;
+using Asmo.Audio;
 using Asmo.Gfx;
 using Asmo.Window.input;
 
@@ -9,9 +10,10 @@ namespace Asmo.Scenes
     /// </summary>
     public abstract class SceneGame : IConsoleGame
     {
-        protected SceneManager SceneManager { get; private set; } = null!;
-        protected Surface Surface { get; private set; } = null!;
-        protected SceneServices Services => SceneManager.Services;
+    protected SceneManager SceneManager { get; private set; } = null!;
+    protected Surface Surface { get; private set; } = null!;
+    protected SceneServices Services => SceneManager.Services;
+    protected AudioEngine AudioEngine { get; private set; } = null!;
 
         public virtual void Init(Surface surface)
         {
@@ -36,6 +38,8 @@ namespace Asmo.Scenes
             }
 
             Services.Register(surface);
+            AudioEngine = new AudioEngine();
+            Services.Register(AudioEngine);
         }
 
         /// <summary>
@@ -46,6 +50,7 @@ namespace Asmo.Scenes
         public virtual void Update(double deltaTime)
         {
             SceneManager.Update(deltaTime);
+            AudioEngine.Update(deltaTime);
 
             if (Services.TryGet<Keyboard>(out var keyboard))
             {
