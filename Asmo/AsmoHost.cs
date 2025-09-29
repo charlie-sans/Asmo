@@ -1,6 +1,5 @@
 using System;
 using Asmo.Window;
-using AstrOS;
 namespace Asmo
 {
     public static class AsmoHost

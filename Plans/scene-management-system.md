@@ -20,9 +20,9 @@ Introduce a lightweight scene stack that handles switching between menus, gamepl
 - Editor tooling for scene graphs.
 
 ## Milestones
-- [ ] Draft scene API contract and integration points with `GameEnvironment`.
-- [ ] Build prototype manager with at least two sample scenes (menu + gameplay).
-- [ ] Implement transition helpers and ensure they play nicely with the render pipeline.
+- [x] Draft scene API contract and integration points with `GameEnvironment`.
+- [x] Build prototype manager with at least two sample scenes (menu + gameplay).
+- [x] Implement transition helpers and ensure they play nicely with the render pipeline.
 - [ ] Document usage and migrate existing sample game to the new system.
 
 ## Dependencies
