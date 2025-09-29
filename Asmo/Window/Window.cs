@@ -1,4 +1,5 @@
-﻿using System;
+﻿
+using System;
 using System.IO;
 using System.Linq;
 using OpenTK.Windowing.Desktop;
@@ -19,10 +20,10 @@ namespace Asmo.Window
         private int _texture;
         private int _shaderProgram;
         private int _vao, _vbo;
-        private int _width = 384, _height = 256; // 2x bigger pixels
-        private Surface framebuffer;
-        private ConsoleHost consoleHost;
-        private HomeScreenDisplay display = new HomeScreenDisplay();
+    private int _width = 640, _height = 420; // 2x bigger pixels
+    public Surface framebuffer;
+    private ConsoleHost consoleHost;
+    private HomeScreenDisplay display = new HomeScreenDisplay();
 
         /// <summary>
         /// Gets the width of the frame buffer in pixels.
@@ -33,7 +34,12 @@ namespace Asmo.Window
         /// </summary>
         public int FrameBufferY => _height;
 
-        public Window() : base(GameWindowSettings.Default, NativeWindowSettings.Default) { }
+        public Window() : base(GameWindowSettings.Default, NativeWindowSettings.Default)
+        {
+            framebuffer = new Surface(_width, _height);
+            framebuffer.Window = this;
+            consoleHost = new ConsoleHost();
+        }
         protected override void OnClosing(CancelEventArgs e)
         {
             base.OnClosing(e);
@@ -42,6 +48,15 @@ namespace Asmo.Window
             GL.DeleteVertexArray(_vao);
             GL.DeleteBuffer(_vbo);
             Environment.Exit(0); // Force exit to stop audio threads
+        }
+                /// <summary>
+        /// Public method to load a game into the window for standalone/debug launching.
+        /// </summary>
+        public void LoadGame(IConsoleGame game)
+        {
+            framebuffer.Window = this;
+            consoleHost.LoadGame(game, framebuffer);
+            gameLoaded = true;
         }
         protected override void OnLoad()
         {
@@ -91,7 +106,7 @@ namespace Asmo.Window
             // set the window size
             Size = new Vector2i((int)(_width * 2.5), _height * 2);
             GL.Viewport(0, 0, (int)(_width * 1.5), Size.Y * -1);
-           
+
         }
 
         public void Render(Surface surface, int x, int y)
@@ -261,5 +276,6 @@ namespace Asmo.Window
             GL.DeleteShader(fragShader);
             return program;
         }
+    
     }
 }

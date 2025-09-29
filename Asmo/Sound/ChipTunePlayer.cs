@@ -112,9 +112,23 @@ namespace Asmo.Sound
 
         public void UpdateMixer()
         {
+            bool added = false;
             while (_oneShotQueue.TryDequeue(out var sfx))
             {
                 _mixer.AddSource(sfx);
+                added = true;
+            }
+            if (added)
+            {
+                if (_soundOut == null)
+                {
+                    _soundOut = new WasapiOut();
+                    _soundOut.Initialize(_mixer);
+                }
+                if (_soundOut.PlaybackState != PlaybackState.Playing)
+                {
+                    _soundOut.Play();
+                }
             }
         }
 
@@ -274,6 +288,14 @@ namespace Asmo.Sound
             instrument ??= (f, d, a) => SoundSynth.DrumKick(1f, 440f, 40f, 1f);
             PlayOneShotFromInstrument(freq, dur, amp, instrument);
         }
+
+        // Stop all currently playing notes (monophonic)
+        public void StopAll()
+        {
+            _mixer?.ClearSources();
+            _oneShotQueue.Clear();
+            _soundOut?.Stop();
+        }
     }
 
     public class SampleToWaveSource : IWaveSource
@@ -347,6 +369,18 @@ namespace Asmo.Sound
             lock (_sources)
             {
                 _sources.Add(source);
+            }
+        }
+
+        public void ClearSources()
+        {
+            lock (_sources)
+            {
+                foreach (var source in _sources)
+                {
+                    source.Dispose();
+                }
+                _sources.Clear();
             }
         }
 

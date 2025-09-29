@@ -1,66 +1,73 @@
-# Asmo Game Framework & AstroTestGame
 
-## Overview
-This project is a simple, extensible C# game framework (Asmo) and a sample game (AstroTestGame) demonstrating its features. It is designed for rapid prototyping, retro-style games, and educational use.
+# Asmo Game Console Framework
 
-## Features
-- Pixel-based 2D graphics (draw text, rectangles, sprites, lines, circles, ellipses, etc.)
-- Simple sound/chiptune playback and sound effect helpers
-- Keyboard input
-- Asset management
-- Extensible game environment configuration
-- Minimal immediate-mode GUI library (see `Gui/Gui.cs`)
-- Example game with moving sprites, power-ups, sound, and screen shake
+Welcome to **Asmo**! This is a fun, modern C#/.NET framework for making retro-style and modern 2D games. It comes with a simple sample game (AstroTestGame) to show you how it works.
 
-## Getting Started
+---
 
-### Prerequisites
-- .NET 9 SDK or later
-- Windows (Linux/Mac may work with minor changes)
+## 🚀 Quick Start
 
-### Building
-1. Clone the repository:
+1. **Requirements:**
+   - .NET 9 SDK or newer
+   - Windows (Linux/Mac might work with tweaks)
+
+2. **Build & Run:**
    ```sh
    git clone https://github.com/charlie-sans/Asmo.git
+   cd Asmo
+   dotnet run
    ```
-2. Open the solution in Visual Studio or run:
-   ```sh
-   dotnet build
-   ```
+   Or open the solution in Visual Studio and run AstroTestGame.
 
-### Running
-- Set `AstroTestGame` as the startup project and run it.
-- The game window will open. Use the arrow keys to move, collect power-ups, and hit the DVD logo!
+2.5. **Drag and drop:**
+   drag and drop the net9.0 folder from the AstroTestGame/bin/Debug/net9.0 folder on the asmo window and the game will start
 
-## Graphics Helpers
-- `Surface.DrawLine(x0, y0, x1, y1, color)`
-- `Surface.DrawCircle(cx, cy, radius, color)`
-- `Surface.DrawFilledCircle(cx, cy, radius, color)`
-- `Surface.DrawOutlinedRect(x, y, w, h, color)`
-- `Surface.DrawEllipse(cx, cy, rx, ry, color)`
+3. **Play!**
+   - Arrow keys to move
+   - Collect power-ups
+   - Hit the DVD logo for fun
 
-## GUI Library
-See `Gui/Gui.cs` for usage:
+---
+
+## 🎮 Features
+
+- Easy 2D pixel graphics (draw text, shapes, sprites, etc.)
+- Chiptune & sound effect playback
+- Keyboard input
+- Simple asset management
+- Minimal, immediate-mode GUI (see `Gui/Gui.cs`)
+- Example game included
+
+---
+
+## 🖼️ Drawing & GUI Example
+
 ```csharp
 Gui.Begin(10, 10);
 Gui.Label(surface, "Hello!", Colors.White);
-bool pressed = Gui.Button(surface, "Click Me", Colors.Yellow, mouseX, mouseY, mouseDown);
-bool checked = false;
-Gui.Checkbox(surface, "Enable feature", ref checked, Colors.Cyan, mouseX, mouseY, mouseDown);
+if (Gui.Button(surface, "Click Me", Colors.Yellow, mouseX, mouseY, mouseDown)) {
+    // Button was clicked!
+}
 ```
 
-## GameEnvironment Configuration
-- `GameEnvironment.AssetRoot` — Path to assets
+---
+
+## ⚙️ Customization
+
+You can tweak the game environment in code:
+
+- `GameEnvironment.AssetRoot` — Where your assets live
 - `GameEnvironment.WindowTitle` — Window title
-- `GameEnvironment.DefaultFont` — Path to default font
 - `GameEnvironment.ShowFps` — Show FPS counter
-- `GameEnvironment.ConfigPath` — Path to config file
 
-## Contributing
-Pull requests and issues are welcome! Please:
-- Use clear commit messages
-- Add tests or sample usage for new features
-- Keep code style consistent
+---
 
-## License
-AGPL V3
+## 🤝 Contributing
+
+Pull requests and issues are welcome! Please keep code style tidy and add examples for new features.
+
+---
+
+## 📄 License
+
+AGPL v3

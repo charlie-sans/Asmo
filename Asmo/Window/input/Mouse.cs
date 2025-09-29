@@ -49,35 +49,34 @@ namespace Asmo.Window.input
         private void OnMouseMove(MouseMoveEventArgs e)
         {
             // Get current window and framebuffer sizes
-            float windowWidth = _window.Size.X;
-            float windowHeight = _window.Size.Y;
-            float framebufferWidth = _window.FrameBufferX;
-            float framebufferHeight = _window.FrameBufferY;
+            double windowWidth = _window.Size.X;
+            double windowHeight = _window.Size.Y;
+            double framebufferWidth = _window.FrameBufferX;
+            double framebufferHeight = _window.FrameBufferY;
 
             // Calculate scale to fit framebuffer into window while preserving aspect ratio
-            float scale = Math.Min(windowWidth / framebufferWidth, windowHeight / framebufferHeight);
+            double scale = Math.Min(windowWidth / framebufferWidth, windowHeight / framebufferHeight);
 
             // Calculate size of the displayed framebuffer in window coordinates
-            float displayWidth = framebufferWidth * scale;
-            float displayHeight = framebufferHeight * scale;
+            double displayWidth = framebufferWidth * scale;
+            double displayHeight = framebufferHeight * scale;
 
             // Calculate black bar offsets (letterboxing/pillarboxing)
-            float offsetX = (windowWidth - displayWidth) / 2f;
-            float offsetY = (windowHeight - displayHeight) / 2f;
+            double offsetX = (windowWidth - displayWidth) / 2.0;
+            double offsetY = (windowHeight - displayHeight) / 2.0;
 
             // Mouse position relative to the displayed framebuffer
-            float mx = (float)e.Position.X - offsetX;
-            float my = (float)e.Position.Y - offsetY;
+            double mx = e.Position.X - offsetX;
+            double my = e.Position.Y - offsetY;
 
             // Default to -1 (off framebuffer)
             int fx = -1, fy = -1;
 
             if (mx >= 0 && my >= 0 && mx < displayWidth && my < displayHeight)
             {
-                fx = (int)(mx / displayWidth * framebufferWidth);
-                // Correct Y inversion: use full range
-                fy = (int)((1.0f - (my / displayHeight)) * framebufferHeight);
-
+                // Map to framebuffer coordinates (Y=0 at top)
+                fx = (int)Math.Round(mx / scale);
+                fy = (int)Math.Round(my / scale);
                 // Clamp to framebuffer bounds
                 fx = Math.Clamp(fx, 0, (int)framebufferWidth - 1);
                 fy = Math.Clamp(fy, 0, (int)framebufferHeight - 1);
@@ -100,26 +99,26 @@ namespace Asmo.Window.input
         public void Update()
         {
             var mouseState = _window.MouseState;
-            float windowWidth = _window.Size.X;
-            float windowHeight = _window.Size.Y;
-            float framebufferWidth = _window.FrameBufferX;
-            float framebufferHeight = _window.FrameBufferY;
+            double windowWidth = _window.Size.X;
+            double windowHeight = _window.Size.Y;
+            double framebufferWidth = _window.FrameBufferX;
+            double framebufferHeight = _window.FrameBufferY;
 
             // Calculate scale and offsets for letterboxing/pillarboxing
-            float scale = Math.Min(windowWidth / framebufferWidth, windowHeight / framebufferHeight);
-            float displayWidth = framebufferWidth * scale;
-            float displayHeight = framebufferHeight * scale;
-            float offsetX = (windowWidth - displayWidth) / 2f;
-            float offsetY = (windowHeight - displayHeight) / 2f;
+            double scale = Math.Min(windowWidth / framebufferWidth, windowHeight / framebufferHeight);
+            double displayWidth = framebufferWidth * scale;
+            double displayHeight = framebufferHeight * scale;
+            double offsetX = (windowWidth - displayWidth) / 2.0;
+            double offsetY = (windowHeight - displayHeight) / 2.0;
 
-            float mx = (float)mouseState.Position.X - offsetX;
-            float my = (float)mouseState.Position.Y - offsetY;
+            double mx = mouseState.Position.X - offsetX;
+            double my = mouseState.Position.Y - offsetY;
 
             int fx = -1, fy = -1;
             if (mx >= 0 && my >= 0 && mx < displayWidth && my < displayHeight)
             {
-                fx = (int)(mx / displayWidth * framebufferWidth);
-                fy = (int)((1.0f - (my / displayHeight)) * framebufferHeight);
+                fx = (int)Math.Round(mx / scale);
+                fy = (int)Math.Round(my / scale);
                 fx = Math.Clamp(fx, 0, (int)framebufferWidth - 1);
                 fy = Math.Clamp(fy, 0, (int)framebufferHeight - 1);
             }

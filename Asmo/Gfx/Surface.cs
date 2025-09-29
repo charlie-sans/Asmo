@@ -3,16 +3,98 @@ using OpenTK.Windowing.Desktop;
 
 namespace Asmo.Gfx
 {
+    // Sprite class for pixel art and UI graphics
+    public class Sprite
+    {
+        public int Width { get; }
+        public int Height { get; }
+        public Color[][] Pixels { get; }
+
+        public Sprite(int width, int height, Color[][] pixels)
+        {
+            Width = width;
+            Height = height;
+            Pixels = pixels;
+        }
+
+        /// <summary>
+        /// Create a sprite from a width, height, and an array of 32-bit ARGB or RGBA values.
+        /// </summary>
+        public static Sprite FromArgbArray(int width, int height, int[] pixels, bool isRgba = true)
+        {
+            var arr = new Color[width][];
+            for (int x = 0; x < width; x++)
+            {
+                arr[x] = new Color[height];
+                for (int y = 0; y < height; y++)
+                {
+                    int idx = y * width + x;
+                    int val = pixels[idx];
+                    byte a, r, g, b;
+                    if (isRgba)
+                    {
+                        r = (byte)((val >> 24) & 0xFF);
+                        g = (byte)((val >> 16) & 0xFF);
+                        b = (byte)((val >> 8) & 0xFF);
+                        a = (byte)(val & 0xFF);
+                    }
+                    else // ARGB
+                    {
+                        a = (byte)((val >> 24) & 0xFF);
+                        r = (byte)((val >> 16) & 0xFF);
+                        g = (byte)((val >> 8) & 0xFF);
+                        b = (byte)(val & 0xFF);
+                    }
+                    arr[x][y] = new Color(r, g, b, a);
+                }
+            }
+            return new Sprite(width, height, arr);
+        }
+
+        /// <summary>
+        /// Create a sprite from a width, height, and a byte array (RGBA or ARGB, 4 bytes per pixel)
+        /// </summary>
+        public static Sprite FromByteArray(int width, int height, byte[] data, bool isRgba = true)
+        {
+            var arr = new Color[width][];
+            for (int x = 0; x < width; x++)
+            {
+                arr[x] = new Color[height];
+                for (int y = 0; y < height; y++)
+                {
+                    int idx = (y * width + x) * 4;
+                    byte r, g, b, a;
+                    if (isRgba)
+                    {
+                        r = data[idx];
+                        g = data[idx + 1];
+                        b = data[idx + 2];
+                        a = data[idx + 3];
+                    }
+                    else // ARGB
+                    {
+                        a = data[idx];
+                        r = data[idx + 1];
+                        g = data[idx + 2];
+                        b = data[idx + 3];
+                    }
+                    arr[x][y] = new Color(r, g, b, a);
+                }
+            }
+            return new Sprite(width, height, arr);
+        }
+    }
+
     public class Surface
     {
         public int Width { get; }
         public int Height { get; }
-    // left null for now
-    public GLFWGraphicsContext Context { get; set; }
-    /// <summary>
-    /// Reference to the owning window, if any.
-    /// </summary>
-    public Asmo.Window.Window Window { get; set; }
+        // left null for now
+        public GLFWGraphicsContext Context { get; set; }
+        /// <summary>
+        /// Reference to the owning window, if any.
+        /// </summary>
+        public Asmo.Window.Window Window { get; set; }
         public Color[][] Pixels { get; }
 
         public Surface(int width, int height)
@@ -26,6 +108,11 @@ namespace Asmo.Gfx
                 for (int y = 0; y < height; y++)
                     Pixels[x][y] = new Color(0, 0, 0, 255);
             }
+        }
+
+        public void FillRect(int x, int y, int width, int height, Surface surface, Color color)
+        {
+            surface.DrawRect(x, y, width, height, color);
         }
 
         public void DrawText(int x, int y, string text, Color color)
@@ -43,7 +130,8 @@ namespace Asmo.Gfx
                             SetPixel(px + fx, y + fy, color);
                     }
             }
-        }   
+        }
+
         public void SetPixel(int x, int y, Color color)
         {
             if (x >= 0 && x < Width && y >= 0 && y < Height)
@@ -82,6 +170,26 @@ namespace Asmo.Gfx
                     }
                 }
         }
+
+        /// <summary>
+        /// Draw a subregion of a sprite at the given position.
+        /// </summary>
+        public void DrawSpriteRegion(Sprite sprite, int x, int y, int srcX, int srcY, int srcW, int srcH)
+        {
+            for (int sx = 0; sx < srcW; sx++)
+                for (int sy = 0; sy < srcH; sy++)
+                {
+                    int px = srcX + sx;
+                    int py = srcY + sy;
+                    if (px < sprite.Width && py < sprite.Height && px >= 0 && py >= 0)
+                    {
+                        var c = sprite.Pixels[px][py];
+                        if (c.A > 0)
+                            SetPixel(x + sx, y + sy, c);
+                    }
+                }
+        }
+
         // Draw a line using Bresenham's algorithm
         public void DrawLine(int x0, int y0, int x1, int y1, Color color)
         {
@@ -163,20 +271,6 @@ namespace Asmo.Gfx
                     px -= twory2;
                 }
             }
-        }
-    }
-
-    public class Sprite
-    {
-        public int Width { get; }
-        public int Height { get; }
-        public Color[][] Pixels { get; }
-
-        public Sprite(int width, int height, Color[][] pixels)
-        {
-            Width = width;
-            Height = height;
-            Pixels = pixels;
         }
     }
 }
