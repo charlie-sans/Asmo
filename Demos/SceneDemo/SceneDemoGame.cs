@@ -19,14 +19,14 @@ namespace SceneDemo
         protected override void RegisterCoreServices(Surface surface)
         {
             base.RegisterCoreServices(surface);
-            AudioEngine.DiagnosticsEnabled = true;
+            AudioEngine.DiagnosticsEnabled = false;
             var logPath = Path.Combine(AppContext.BaseDirectory, "scene-demo-audio.log");
             var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-            AudioEngine.DiagnosticsSink = msg =>
-            {
-                Console.WriteLine(msg);
-                File.AppendAllText(logPath, msg + Environment.NewLine, encoding);
-            };
+            // AudioEngine.DiagnosticsSink = msg =>
+            // {
+            //     Console.WriteLine(msg);
+            //     File.AppendAllText(logPath, msg + Environment.NewLine, encoding);
+            // };
             SceneDiagnostics.Log("Audio diagnostics configured for SceneDemoGame.");
             Services.Register(new System.Random());
             _audioLibrary = new SceneAudioLibrary();
@@ -58,8 +58,8 @@ namespace SceneDemo
             });
             SceneDiagnostics.Log("Ambient loop started during game configuration.");
 
-            sceneManager.PushScene(new Scenes.SplashScene(), new FadeTransition(duration: 0.4));
-            SceneDiagnostics.Log("SplashScene pushed onto scene stack.");
+            sceneManager.PushScene(new MASMDemoScene(), new FadeTransition(duration: 0.4));
+            SceneDiagnostics.Log("MASMDemoScene pushed onto scene stack.");
         }
 
         internal AudioBus SfxBus => _sfxBus ??= Services.GetRequired<AudioEngine>().GetOrCreateBus("sfx");

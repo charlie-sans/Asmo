@@ -20,6 +20,7 @@
     <PackageReference Include="FNA.NET" Version="2.1.2.2506" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
+    <ProjectReference Include="..\AsmoMASM\SharpMASM.csproj" />
   </ItemGroup>
 
 

@@ -13,7 +13,7 @@ namespace Asmo.Audio
             var env = Environment.GetEnvironmentVariable("ASMO_AUDIO_LOG");
             if (string.IsNullOrWhiteSpace(env))
             {
-                _enabled = true;
+                _enabled = false;
             }
             else
             {

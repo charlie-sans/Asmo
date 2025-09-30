@@ -1,0 +1,18 @@
+LBL main
+MNI Graphics.clear 0
+MOV R0 100
+MOV R1 100
+MOV R2 110
+MOV R3 115
+MOV R4 4294967295
+LBL draw_loop_y
+MOV R5 R0
+LBL draw_loop_x
+MNI Graphics.setPixel R5 R1 R4
+ADD R5 R5 1
+CMP R5 R2
+JNE #draw_loop_x
+ADD R1 R1 1
+CMP R1 R3
+JNE #draw_loop_y
+HLT

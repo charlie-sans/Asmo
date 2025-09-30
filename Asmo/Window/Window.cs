@@ -20,10 +20,10 @@ namespace Asmo.Window
         private int _texture;
         private int _shaderProgram;
         private int _vao, _vbo;
-    private int _width = 640, _height = 420; // 2x bigger pixels
-    public Surface framebuffer;
-    private ConsoleHost consoleHost;
-    private HomeScreenDisplay display = new HomeScreenDisplay();
+        private int _width = GameEnvironment.ScreenWidth, _height = GameEnvironment.ScreenHeight;
+        public Surface framebuffer;
+        private ConsoleHost consoleHost;
+        private HomeScreenDisplay display = new HomeScreenDisplay();
 
         /// <summary>
         /// Gets the width of the frame buffer in pixels.
@@ -49,7 +49,7 @@ namespace Asmo.Window
             GL.DeleteBuffer(_vbo);
             Environment.Exit(0); // Force exit to stop audio threads
         }
-                /// <summary>
+        /// <summary>
         /// Public method to load a game into the window for standalone/debug launching.
         /// </summary>
         public void LoadGame(IConsoleGame game)
@@ -95,7 +95,7 @@ namespace Asmo.Window
             GL.BindVertexArray(0);
 
             // Load shaders
-            _shaderProgram = CreateShaderProgram("Window/Shaders/shader.vert", "Window/Shaders/shader.frag");
+            _shaderProgram = CreateShaderProgram(Shaders.DefaultVertexShaderSource, Shaders.DefaultFragmentShaderSource);
 
             // Initialize framebuffer and console host
             framebuffer = new Surface(_width, _height);
@@ -103,9 +103,11 @@ namespace Asmo.Window
             consoleHost = new ConsoleHost();
             // Set the window title
             Title = "Asmo Game Console";
-            // set the window size
-            Size = new Vector2i((int)(_width * 2.5), _height * 2);
-            GL.Viewport(0, 0, (int)(_width * 1.5), Size.Y * -1);
+            // Set the window size to a multiple of framebuffer (e.g., 2x)
+            int scale = 2;
+            Size = new Vector2i(_width * scale, _height * scale);
+            // Set initial viewport (will be updated in OnResize)
+            UpdateViewport();
 
         }
 
@@ -155,8 +157,11 @@ namespace Asmo.Window
         {
             base.OnRenderFrame(args);
 
-            GL.Clear(ClearBufferMask.ColorBufferBit);// --- FNA framework update ---
-         
+            GL.Clear(ClearBufferMask.ColorBufferBit);
+
+            // Ensure viewport is correct (in case window was resized)
+            UpdateViewport();
+
             GL.UseProgram(_shaderProgram);
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, _texture);
@@ -172,7 +177,7 @@ namespace Asmo.Window
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
-                display.RenderHomeScreen(args,framebuffer);
+                display.RenderHomeScreen(args, framebuffer);
             }
             else
             {
@@ -181,11 +186,40 @@ namespace Asmo.Window
             }
             Render(framebuffer, 0, 0);
         }
-        
+
         protected override void OnResize(OpenTK.Windowing.Common.ResizeEventArgs e)
         {
             base.OnResize(e);
-            GL.Viewport(0, 0, Size.X, Size.Y);
+            UpdateViewport();
+
+        }
+
+        /// <summary>
+        /// Updates the OpenGL viewport to center the framebuffer in the window with black bars.
+        /// </summary>
+        private void UpdateViewport()
+        {
+            float windowAspect = (float)Size.X / Size.Y;
+            float fbAspect = (float)_width / _height;
+            int vpWidth, vpHeight, vpX, vpY;
+
+            if (windowAspect > fbAspect)
+            {
+                // Window is wider than framebuffer
+                vpHeight = Size.Y;
+                vpWidth = (int)(vpHeight * fbAspect);
+                vpX = (Size.X - vpWidth) / 2;
+                vpY = 0;
+            }
+            else
+            {
+                // Window is taller than framebuffer
+                vpWidth = Size.X;
+                vpHeight = (int)(vpWidth / fbAspect);
+                vpX = 0;
+                vpY = (Size.Y - vpHeight) / 2;
+            }
+            GL.Viewport(vpX, vpY, vpWidth, vpHeight);
         }
 
         protected override void OnFileDrop(OpenTK.Windowing.Common.FileDropEventArgs e)
@@ -260,8 +294,8 @@ namespace Asmo.Window
 
         private int CreateShaderProgram(string vertPath, string fragPath)
         {
-            string vertSource = File.ReadAllText(vertPath);
-            string fragSource = File.ReadAllText(fragPath);
+            string vertSource = vertPath;
+            string fragSource = fragPath;
             int vertShader = GL.CreateShader(ShaderType.VertexShader);
             GL.ShaderSource(vertShader, vertSource);
             GL.CompileShader(vertShader);
@@ -276,6 +310,6 @@ namespace Asmo.Window
             GL.DeleteShader(fragShader);
             return program;
         }
-    
+
     }
 }
