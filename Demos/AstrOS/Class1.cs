@@ -7,14 +7,27 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using OpenTK.Windowing.GraphicsLibraryFramework;
-
+    public class AboutWindow
+    {
+        public void Draw(Surface surface, AstrOS.BasicWindow win)
+        {
+            int x = win.X + 24, y = win.Y + 40;
+            surface.DrawText(x, y, "AstrOS", Asmo.Gfx.Colors.Yellow);
+            y += 32;
+            surface.DrawText(x, y, "A sample desktop environment demo.", Asmo.Gfx.Colors.White);
+            y += 24;
+            surface.DrawText(x, y, "(c) 2025 charlie-sans", Asmo.Gfx.Colors.Gray);
+            y += 24;
+            surface.DrawText(x, y, "Powered by Asmo Engine", Asmo.Gfx.Colors.Gray);
+        }
+    }
 namespace AstrOS
 {
     public class Programs
     {
         public static void Main(string[] args)
         {
-            AsmoHost.LaunchStandalone(() => new AstrOS.Game());
+
         }
     }
     public class Game : Asmo.Gfx.IConsoleGame
@@ -26,12 +39,14 @@ namespace AstrOS
         private bool mouseDown = false;
         private int mouseDownX, mouseDownY;
         private AstrOS.BasicWindow? draggingWindow = null;
-    private AudioEngine? _audio;
-    private AudioBus? _musicBus;
-    private AudioBus? _sfxBus;
-    private AudioHandle? _ambientHandle;
-    private AudioClip? _clickClip;
+        private AudioEngine? _audio;
+        private AudioBus? _musicBus;
+        private AudioBus? _sfxBus;
+        private AudioHandle? _ambientHandle;
+        private AudioClip? _clickClip;
     private AudioClip? _closeClip;
+    private bool _prevLeftDown;
+    private bool _prevRightDown;
 
         public Game() { }
 
@@ -45,6 +60,12 @@ namespace AstrOS
             windowManager.AddWindow(termWindow);
             InitialiseAudio();
             terminal?.ConfigureAudio(_sfxBus, _clickClip);
+                   var about = new AboutWindow();
+            AstrOS.AppRegistry.Register(new AstrOS.App("About", () =>
+            {
+                var win = new AstrOS.BasicWindow(120, 120, 400, 220, "About AstrOS", (s, w) => about.Draw(s, w));
+                windowManager.AddWindow(win);
+            }));
         }
 
         public void Update(double deltaTime)
@@ -57,40 +78,65 @@ namespace AstrOS
             // Mouse input
             int mx = mouse.X, my = mouse.Y;
             bool left = mouse.IsButtonDown(MouseButton.Left);
+            bool right = mouse.IsButtonDown(MouseButton.Right);
+            bool leftReleased = _prevLeftDown && !left;
+            bool rightReleased = _prevRightDown && !right;
+            bool rightJustPressed = !_prevRightDown && right;
 
-            if (left && !mouseDown)
+            // Only open context menu on rightJustPressed, but pass current right state for rightReleased
+            windowManager.HandleMouseInput(mx, my, left, rightJustPressed, leftReleased, rightReleased);
+
+            if (!windowManager.IsContextMenuVisible)
             {
-                mouseDown = true;
-                mouseDownX = mx; mouseDownY = my;
-                // Check for window interaction (from topmost)
-                for (int i = windowManager.Windows.Count - 1; i >= 0; i--)
+                if (left && !mouseDown)
                 {
-                    var win = windowManager.Windows[i];
-                    if (win.IsPointInside(mx, my))
+                    mouseDown = true;
+                    mouseDownX = mx; mouseDownY = my;
+                    // Check for window interaction (from topmost)
+                    for (int i = windowManager.Windows.Count - 1; i >= 0; i--)
                     {
-                        windowManager.BringToFront(win);
-                        win.IsFocused = true;
-                        PlayClick();
-                        // Close button
-                        if (win.IsOnCloseButton(mx, my))
+                        var win = windowManager.Windows[i];
+                        if (win.IsPointInside(mx, my))
                         {
-                            PlayClose();
-                            windowManager.CloseWindow(win);
-                            break;
-                        }
-                        // Title bar drag
-                        else if (win.IsOnTitleBar(mx, my))
-                        {
-                            draggingWindow = win;
-                            win.DragOffsetX = mx - win.X;
-                            win.DragOffsetY = my - win.Y;
-                            win.IsDragging = true;
-                            break;
+                            windowManager.BringToFront(win);
+                            win.IsFocused = true;
+                            PlayClick();
+                            // Close button
+                            if (win.IsOnCloseButton(mx, my))
+                            {
+                                PlayClose();
+                                windowManager.CloseWindow(win);
+                                break;
+                            }
+                            // Title bar drag
+                            else if (win.IsOnTitleBar(mx, my))
+                            {
+                                draggingWindow = win;
+                                win.DragOffsetX = mx - win.X;
+                                win.DragOffsetY = my - win.Y;
+                                win.IsDragging = true;
+                                break;
+                            }
                         }
                     }
                 }
+                else if (!left && mouseDown)
+                {
+                    mouseDown = false;
+                    if (draggingWindow != null)
+                    {
+                        draggingWindow.IsDragging = false;
+                        draggingWindow = null;
+                    }
+                }
+                else if (left && draggingWindow != null)
+                {
+                    // Drag window
+                    draggingWindow.X = mx - draggingWindow.DragOffsetX;
+                    draggingWindow.Y = my - draggingWindow.DragOffsetY;
+                }
             }
-            else if (!left && mouseDown)
+            else
             {
                 mouseDown = false;
                 if (draggingWindow != null)
@@ -99,12 +145,9 @@ namespace AstrOS
                     draggingWindow = null;
                 }
             }
-            else if (left && draggingWindow != null)
-            {
-                // Drag window
-                draggingWindow.X = mx - draggingWindow.DragOffsetX;
-                draggingWindow.Y = my - draggingWindow.DragOffsetY;
-            }
+
+            _prevLeftDown = left;
+            _prevRightDown = right;
 
             // Only one window focused at a time
             for (int i = 0; i < windowManager.Windows.Count; i++)
@@ -122,7 +165,8 @@ namespace AstrOS
 
         public void Draw(Asmo.Gfx.Surface surface)
         {
-            surface.Clear(Asmo.Gfx.Colors.Black);
+            // Draw desktop background (solid color)
+            surface.FillRect(0, 0, surface.Width, surface.Height, surface, Asmo.Gfx.Colors.DarkBlue);
             windowManager?.DrawAll(surface);
 
             // Draw mouse cursor (simple cross)

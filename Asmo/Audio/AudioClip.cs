@@ -27,8 +27,15 @@ namespace Asmo.Audio
 
         public int SampleRate { get; }
         public int Channels { get; }
-        internal int TotalSamples => _samples.Length;
-        internal float[] SampleBuffer => _samples;
+    /// <summary>
+    /// Total number of samples in the clip (all channels).
+    /// </summary>
+    public int TotalSamples => _samples.Length;
+
+    /// <summary>
+    /// For diagnostics: returns a copy of the sample buffer (do not use for playback).
+    /// </summary>
+    public float[] GetSampleBuffer() => (float[])_samples.Clone();
 
         /// <summary>
         /// Loads an audio clip from disk and converts it to the engine's canonical format (floating-point, stereo, 44.1 kHz).

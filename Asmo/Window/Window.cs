@@ -20,20 +20,19 @@ namespace Asmo.Window
         private int _texture;
         private int _shaderProgram;
         private int _vao, _vbo;
-        private int _width = GameEnvironment.ScreenWidth, _height = GameEnvironment.ScreenHeight;
+    private int _width = GameEnvironment.ScreenWidth, _height = GameEnvironment.ScreenHeight;
     public Surface framebuffer;
     // Persistent buffer for texture uploads
     private byte[] _uploadBuffer;
     // Optional: PBO for async texture uploads (advanced)
     private int _pbo = 0;
     // Hybrid renderer support
-    public Asmo.Gfx.IRenderer _renderer;
-    private Asmo.Gfx.SoftwareRenderer _softwareRenderer;
-    private Asmo.Gfx.HardwareRenderer _hardwareRenderer;
+
     public enum RendererType { Software, Hardware }
     public RendererType CurrentRendererType { get; private set; } = RendererType.Hardware;
-        private ConsoleHost consoleHost;
-        private HomeScreenDisplay display = new HomeScreenDisplay();
+    private ConsoleHost consoleHost;
+    private HomeScreenDisplay display = new HomeScreenDisplay();
+    private Asmo.Window.input.Mouse mouse;
 
         /// <summary>
         /// Gets the width of the frame buffer in pixels.
@@ -44,28 +43,39 @@ namespace Asmo.Window
         /// </summary>
         public int FrameBufferY => _height;
 
-        public Window() : base(GameWindowSettings.Default, NativeWindowSettings.Default)
+        public Window(GameWindowSettings settings) : base(gameWindowSettings: settings, NativeWindowSettings.Default)
         {
             framebuffer = new Surface(_width, _height);
             framebuffer.Window = this;
             consoleHost = new ConsoleHost();
-            // Initialize both renderers
-            _softwareRenderer = new Asmo.Gfx.SoftwareRenderer(framebuffer);
-            _hardwareRenderer = new Asmo.Gfx.HardwareRenderer();
-            _renderer = _hardwareRenderer;
+            mouse = new Asmo.Window.input.Mouse(this);
         }
 
         /// <summary>
-        /// Switch between hardware and software renderer at runtime.
+        /// Resize the framebuffer and all related resources at runtime.
         /// </summary>
-        public void SetRenderer(RendererType type)
+        public void ResizeFrameBuffer(int width, int height)
         {
-            if (type == RendererType.Hardware)
-                _renderer = _hardwareRenderer;
-            else
-                _renderer = _softwareRenderer;
-            CurrentRendererType = type;
+            if (width == _width && height == _height) return;
+            _width = width;
+            _height = height;
+            framebuffer = new Surface(_width, _height);
+            framebuffer.Window = this;
+            // Update OpenGL texture
+            GL.BindTexture(TextureTarget.Texture2D, _texture);
+            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, _width, _height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+            // Update upload buffer and PBO
+            _uploadBuffer = new byte[_width * _height * 4];
+            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
+            GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
+            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
+            // Optionally update window size or viewport
+            int scale = 2;
+            Size = new Vector2i(_width * scale, _height * scale);
+            UpdateViewport();
         }
+
+
         protected override void OnClosing(CancelEventArgs e)
         {
             base.OnClosing(e);
@@ -228,8 +238,8 @@ namespace Asmo.Window
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
-                // Pass the current renderer and window size to HomeScreenDisplay
-                display.RenderHomeScreen(args, framebuffer);
+                // Always pass the Mouse instance to HomeScreenDisplay
+                display.RenderHomeScreen(args, framebuffer, mouse);
             }
             else
             {

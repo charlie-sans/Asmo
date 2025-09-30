@@ -32,6 +32,6 @@ namespace Asmo.Gfx
         public static readonly Color DarkYellow = new Color(139, 139, 0, 255);
         public static readonly Color DarkOrange = new Color(255, 140, 0, 255);
         public static readonly Color DarkPurple = new Color(85, 0, 85, 255);
-        
+        internal static Color Lime = new Color(0, 255, 0, 255);
     }
 }

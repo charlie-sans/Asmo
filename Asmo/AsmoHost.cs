@@ -1,5 +1,6 @@
 using System;
 using Asmo.Window;
+using Microsoft.Xna.Framework;
 namespace Asmo
 {
     public static class AsmoHost
@@ -19,7 +20,10 @@ namespace Asmo
             
             var consoleHost = new ConsoleHost();
             
-            var window = new Asmo.Window.Window();
+            var window = new Asmo.Window.Window(new OpenTK.Windowing.Desktop.GameWindowSettings()
+            {
+                UpdateFrequency = 144.0,
+            });
             // Load the game into the window
             consoleHost.LoadGame(game, window.framebuffer);
             // Run the window (starts the main loop)

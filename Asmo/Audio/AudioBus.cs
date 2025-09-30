@@ -131,6 +131,7 @@ namespace Asmo.Audio
                                 finishedInstances ??= new List<AudioInstance>();
                                 finishedInstances.Add(instance);
                                 AudioDiagnostics.Log($"Bus '{Name}' instance produced no samples (read=0, volume={instance.Volume:0.00}).");
+                                Console.WriteLine($"[AudioBus] Removing instance for bus '{Name}' due to read=0");
                                 continue;
                             }
 
@@ -156,6 +157,7 @@ namespace Asmo.Audio
                     {
                         foreach (var instance in finishedInstances)
                         {
+                            Console.WriteLine($"[AudioBus] Actually removing instance for bus '{Name}'");
                             _instances.Remove(instance);
                         }
                     }

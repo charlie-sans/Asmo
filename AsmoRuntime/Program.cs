@@ -11,11 +11,14 @@ public class Startup
     {
         // we really should be doing more here... sad to see this as dead as it is.
         // but for now, this is just a stub to launch the window.
-        
-        using (var game = new Window.Window())
+
+        using (var game = new Window.Window(new OpenTK.Windowing.Desktop.GameWindowSettings()
         {
-            
-            game.Run();
+            Win32SuspendTimerOnDrag = true,
+
+        }))
+        {
+                game.Run();            
         }
     }
 }

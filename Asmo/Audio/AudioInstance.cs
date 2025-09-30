@@ -102,6 +102,7 @@ namespace Asmo.Audio
         {
             if (!IsPlaying)
             {
+                Console.WriteLine($"[AudioInstance] Read: Not playing, returning 0. _samplePosition={_samplePosition} _clip.TotalSamples={_clip.TotalSamples}");
                 Array.Clear(buffer, offset, count);
                 return 0;
             }
@@ -126,13 +127,14 @@ namespace Asmo.Audio
                             AudioDiagnostics.Log("Instance reached end of clip.");
                             _loggedStop = true;
                         }
+                        Console.WriteLine($"[AudioInstance] Read: End of clip, returning {samplesWritten} samples. _samplePosition={_samplePosition} _clip.TotalSamples={_clip.TotalSamples}");
                         Array.Clear(buffer, offset + samplesWritten, count - samplesWritten);
                         break;
                     }
                 }
 
                 int toCopy = Math.Min(remainingSamples, count - samplesWritten);
-                Array.Copy(_clip.SampleBuffer, _samplePosition, buffer, offset + samplesWritten, toCopy);
+                Array.Copy(_clip.GetSampleBuffer(), _samplePosition, buffer, offset + samplesWritten, toCopy);
                 _samplePosition += toCopy;
                 samplesWritten += toCopy;
             }

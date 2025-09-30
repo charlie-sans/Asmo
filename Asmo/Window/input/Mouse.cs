@@ -83,7 +83,7 @@ namespace Asmo.Window.input
             }
 
             X = fx;
-            Y = fy;
+            Y = fy + 20; // Adjust Y for window title bar height (approximate)
 
             // Debug output occasionally
             if (X % 32 == 0 && Y % 32 == 0 && X >= 0 && Y >= 0) // Only log at certain positions to avoid spam
