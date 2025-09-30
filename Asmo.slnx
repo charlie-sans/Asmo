@@ -8,4 +8,7 @@
   <Project Path="Demos/SceneDemo/SceneDemo.csproj" />
   <Project Path="AsmoMASM/SharpMASM.csproj" />
   <Project Path="Demos/chippy/chippy.csproj" />
+  <Project Path="Demos/Asteroids/AsteroidsGame.csproj" />
+  <Project Path="Demos/CSCoreDemo/CSCoreDemo.csproj" />
+  <Project Path="Demos/WordProcessor/TemplateGame.csproj" />
 </Solution>

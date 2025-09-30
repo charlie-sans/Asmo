@@ -49,6 +49,10 @@ namespace Asmo.Window.HomeScreen
         {
             GameEnvironment.ShowFps = false;
 
+            // Ensure DebugOverlay exists
+            if (Asmo.DebugOverlay.Current == null)
+                new Asmo.DebugOverlay();
+            Asmo.DebugOverlay.Current?.Show();
             // Play boot chime only once per app run
             if (!bootChimePlayed)
             {
@@ -72,6 +76,7 @@ namespace Asmo.Window.HomeScreen
                 }
                 bootChimePlayed = true;
             }
+            Asmo.DebugOverlay.Current?.Toggle();
         }
 
     public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
@@ -129,10 +134,10 @@ namespace Asmo.Window.HomeScreen
             int buttonY = y + 8;
             Asmo.Gui.Gui.Begin(buttonX, buttonY);
             bool mouseDown = mouse != null && framebuffer.Window.IsMouseButtonDown(OpenTK.Windowing.GraphicsLibraryFramework.MouseButton.Left);
-            if (Asmo.Gui.Gui.Button(framebuffer, "Toggle Debug Overlay", Colors.Magenta, mouseX, mouseY, mouseDown))
-            {
-                Asmo.DebugOverlay.Current?.Toggle();
-            }
+            // if (Asmo.Gui.Gui.Button(framebuffer, "Toggle Debug Overlay", Colors.Magenta, mouseX, mouseY, mouseDown))
+            // {
+            //     Asmo.DebugOverlay.Current?.Toggle();
+            // }
 
             y += 32;
 
@@ -141,60 +146,15 @@ namespace Asmo.Window.HomeScreen
             framebuffer.DrawText(panelX + 20, tipY, tips[tipIndex], Colors.Green);
             if (GameEnvironment.ShowFps)
             {
-            framebuffer.DrawText(fpsTextX, fpsTextY, fpsText, Colors.White);
-            // --- Frame time graph (ms) ---
-            int graphWidth = FrameGraphSamples;
-            int graphHeight = 40;
-            int graphX = (framebuffer.Width - graphWidth) / 2;
-            int graphY = framebuffer.Height - (graphHeight * 2) - 16;
-            float maxMs = 33.3f; // 30 FPS = 33.3ms, cap graph at this
-            // Draw background
-            framebuffer.DrawRect(graphX - 2, graphY - 2, graphWidth + 4, graphHeight + 4, new Asmo.Types.Color(0, 0, 0, 180));
-            // Draw bars
-            for (int i = 0; i < FrameGraphSamples; i++)
-            {
-                int idx = (frameTimeIndex + i) % FrameGraphSamples;
-                float ms = frameTimes[idx];
-                int barH = (int)Math.Min((ms / maxMs) * (graphHeight - 4), graphHeight - 4);
-                int barY = graphY + (graphHeight - 4 - barH) + 2;
-                int barX = graphX + i;
-                var color = ms < 16.7f ? Colors.Green : (ms < 25f ? Colors.Yellow : Colors.Red);
-                framebuffer.DrawRect(barX, barY, 1, barH, color);
-            }
-            // Draw axis line
-            framebuffer.DrawRect(graphX, graphY + graphHeight - 2, graphWidth, 1, Colors.Gray);
-            // Draw labels
-            framebuffer.DrawText(graphX + 4, graphY + 4, $"Frame ms", Colors.White);
-            framebuffer.DrawText(graphX + 4, graphY + 16, $"16.7ms (60fps)", Colors.Green);
-            framebuffer.DrawText(graphX + 4, graphY + 28, $"33.3ms (30fps)", Colors.Red);
-
-            // --- FPS graph ---
-            int fpsGraphHeight = 40;
-            int fpsGraphX = graphX;
-            int fpsGraphY = graphY + graphHeight + 8;
-            float maxFps = 120f;
-            framebuffer.DrawRect(fpsGraphX - 2, fpsGraphY - 2, graphWidth + 4, fpsGraphHeight + 4, new Asmo.Types.Color(0, 0, 0, 180));
-            for (int i = 0; i < FrameGraphSamples; i++)
-            {
-                int idx = (frameTimeIndex + i) % FrameGraphSamples;
-                float ms = frameTimes[idx];
-                float fps = ms > 0.01f ? 1000.0f / ms : maxFps;
-                int barH = (int)Math.Min((fps / maxFps) * (fpsGraphHeight - 4), fpsGraphHeight - 4);
-                int barY = fpsGraphY + (fpsGraphHeight - 4 - barH) + 2;
-                int barX = fpsGraphX + i;
-                var color = fps > 60f ? Colors.Green : (fps > 30f ? Colors.Yellow : Colors.Red);
-                framebuffer.DrawRect(barX, barY, 1, barH, color);
-            }
-            framebuffer.DrawRect(fpsGraphX, fpsGraphY + fpsGraphHeight - 2, graphWidth, 1, Colors.Gray);
-            framebuffer.DrawText(fpsGraphX + 4, fpsGraphY + 4, $"FPS", Colors.White);
-            framebuffer.DrawText(fpsGraphX + 4, fpsGraphY + 16, $"60 FPS", Colors.Green);
-            framebuffer.DrawText(fpsGraphX + 4, fpsGraphY + 28, $"30 FPS", Colors.Red);
+                framebuffer.DrawText(fpsTextX, fpsTextY, fpsText, Colors.White);
+                // Removed manual frame time and FPS graph drawing. DebugOverlay handles this now.
             }
             // Draw mouse cursor
             if (mouseX >= 0 && mouseY >= 0 && mouseX < framebuffer.Width && mouseY < framebuffer.Height)
             {
                 framebuffer.DrawOutlinedRect(mouseX - 4, mouseY - 4, 9, 9, Colors.Magenta);
             }
+            Asmo.DebugOverlay.Current?.Render(framebuffer);
         }
     }
 }

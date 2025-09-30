@@ -22,7 +22,7 @@ namespace Asmo
         private long _lastMemory = 0;
         private StringBuilder _sb = new StringBuilder();
         private Asmo.Window.input.Keyboard? _keyboard;
-
+        
         public void SetKeyboard(Asmo.Window.input.Keyboard keyboard)
         {
             _keyboard = keyboard;
@@ -34,6 +34,7 @@ namespace Asmo
         }
 
         public void Toggle() => _visible = !_visible;
+    public void Show() => _visible = true;
         public bool IsVisible => _visible;
 
         public void BeginFrame()
@@ -68,35 +69,80 @@ namespace Asmo
 
         public void RegisterDrawCall() => _drawCallCount++;
 
-        public void Render(Surface surface)
+        public double GetAverageFrameTime() {
+            if (_frameTimes.Count == 0) return 0;
+            return _frameTimes.Average();
+        }
+        public double GetMinFrameTime() {
+            if (_frameTimes.Count == 0) return 0;
+            return _frameTimes.Min();
+        }
+        public double GetMaxFrameTime() {
+            if (_frameTimes.Count == 0) return 0;
+            return _frameTimes.Max();
+        }
+
+        public void DrawFrameTimeGraph(Asmo.Gfx.Surface surface, int x, int y, int width, int height) {
+            if (_frameTimes.Count == 0) return;
+            double maxMs = Math.Max(33.3, GetMaxFrameTime());
+            var arr = _frameTimes.ToArray();
+            int n = Math.Min(width, arr.Length);
+            for (int i = 0; i < n; i++) {
+                int idx = (arr.Length + _frameTimes.Count - n + i) % arr.Length;
+                double ms = arr[idx];
+                int barH = (int)Math.Min((ms / maxMs) * (height - 4), height - 4);
+                int barY = y + (height - 4 - barH) + 2;
+                int barX = x + i;
+                var color = ms < 16.7 ? Asmo.Gfx.Colors.Green : (ms < 25 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red);
+                surface.DrawRect(barX, barY, 1, barH, color);
+            }
+            surface.DrawRect(x, y + height - 2, width, 1, Asmo.Gfx.Colors.Gray);
+            surface.DrawText(x + 4, y + 4, $"Frame ms", Asmo.Gfx.Colors.White);
+            surface.DrawText(x + 4, y + 16, $"16.7ms (60fps)", Asmo.Gfx.Colors.Green);
+            surface.DrawText(x + 4, y + 28, $"33.3ms (30fps)", Asmo.Gfx.Colors.Red);
+        }
+
+        public void DrawFpsGraph(Asmo.Gfx.Surface surface, int x, int y, int width, int height) {
+            if (_frameTimes.Count == 0) return;
+            double maxFps = 120.0;
+            var arr = _frameTimes.ToArray();
+            int n = Math.Min(width, arr.Length);
+            for (int i = 0; i < n; i++) {
+                int idx = (arr.Length + _frameTimes.Count - n + i) % arr.Length;
+                double ms = arr[idx];
+                double fps = ms > 0.01 ? 1000.0 / ms : maxFps;
+                int barH = (int)Math.Min((fps / maxFps) * (height - 4), height - 4);
+                int barY = y + (height - 4 - barH) + 2;
+                int barX = x + i;
+                var color = fps > 60 ? Asmo.Gfx.Colors.Green : (fps > 30 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red);
+                surface.DrawRect(barX, barY, 1, barH, color);
+            }
+            surface.DrawRect(x, y + height - 2, width, 1, Asmo.Gfx.Colors.Gray);
+            surface.DrawText(x + 4, y + 4, $"FPS", Asmo.Gfx.Colors.White);
+            surface.DrawText(x + 4, y + 16, $"60 FPS", Asmo.Gfx.Colors.Green);
+            surface.DrawText(x + 4, y + 28, $"30 FPS", Asmo.Gfx.Colors.Red);
+        }
+
+        public void Render(Asmo.Gfx.Surface surface)
         {
             if (!_visible) return;
             _sb.Clear();
             _sb.AppendLine($"FPS: {_lastFps:F1} (1% low: {_last1PercentLow:F1})");
             _sb.AppendLine($"Draw Calls: {_drawCallCount}");
             _sb.AppendLine($"Memory: {_lastMemory / 1024 / 1024} MB");
-
             // Input state panel
             if (_keyboard != null)
             {
-                var pressed = typeof(OpenTK.Windowing.GraphicsLibraryFramework.Keys)
-                    .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-                    .Select(f => (OpenTK.Windowing.GraphicsLibraryFramework.Keys)f.GetValue(null)!)
-                    .Where(k => _keyboard.IsKeyDown(k))
-                    .ToArray();
-                if (pressed.Length > 0)
-                {
-                    _sb.Append("Keys: ");
-                    _sb.AppendLine(string.Join(", ", pressed));
-                }
-                else
-                {
-                    _sb.AppendLine("Keys: (none)");
-                }
+                // _sb.AppendLine("Keys: " + string.Join(", ", _keyboard.GetPressedKeys()));
             }
-
-            // TODO: Add audio, scene, ECS stats
-            surface.DrawText(8, 8, _sb.ToString(), Colors.White);
+            surface.DrawText(8, 8, _sb.ToString(), Asmo.Gfx.Colors.White);
+            // Draw frame time and FPS graphs below the text
+            int graphX = 8;
+            int graphY = 64;
+            int graphWidth = 120;
+            int graphHeight = 40;
+            DrawFrameTimeGraph(surface, graphX, graphY, graphWidth, graphHeight);
+            DrawFpsGraph(surface, graphX, graphY + graphHeight + 8, graphWidth, graphHeight);
         }
     }
 }

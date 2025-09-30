@@ -85,23 +85,23 @@ namespace Asmo.Audio
         /// <summary>
         /// Generates a sine wave clip procedurally.
         /// </summary>
-        public static AudioClip CreateSine(double frequency, double durationSeconds, float amplitude = 0.5f, int sampleRate = DefaultSampleRate)
-            => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate, DefaultChannels);
+        // public static AudioClip CreateSine(double frequency, double durationSeconds, float amplitude = 0.5f, int sampleRate = DefaultSampleRate)
+        //     => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate, DefaultChannels);
 
         /// <summary>
         /// Generates a square wave clip procedurally.
         /// </summary>
-        public static AudioClip CreateSquare(double frequency, double durationSeconds, float amplitude = 0.4f, int sampleRate = DefaultSampleRate)
-            => GenerateProcedural((t, _) => MathF.Sign(MathF.Sin((float)(2 * Math.PI * frequency * t))) * amplitude, durationSeconds, sampleRate, DefaultChannels);
+        // public static AudioClip CreateSquare(double frequency, double durationSeconds, float amplitude = 0.4f, int sampleRate = DefaultSampleRate)
+        //     => GenerateProcedural((t, _) => MathF.Sign(MathF.Sin((float)(2 * Math.PI * frequency * t))) * amplitude, durationSeconds, sampleRate, DefaultChannels);
 
         /// <summary>
         /// Generates white noise clip procedurally.
         /// </summary>
-        public static AudioClip CreateNoise(double durationSeconds, float amplitude = 0.2f, int sampleRate = DefaultSampleRate)
-        {
-            var random = new Random();
-            return GenerateProcedural((_, __) => (float)((random.NextDouble() * 2.0 - 1.0) * amplitude), durationSeconds, sampleRate, DefaultChannels);
-        }
+        // public static AudioClip CreateNoise(double durationSeconds, float amplitude = 0.2f, int sampleRate = DefaultSampleRate)
+        // {
+        //     var random = new Random();
+        //     return GenerateProcedural((_, __) => (float)((random.NextDouble() * 2.0 - 1.0) * amplitude), durationSeconds, sampleRate, DefaultChannels);
+        // }
 
         public static AudioClip CreateSine(double frequency, double durationSeconds, float amplitude = 0.5f, int sampleRate = DefaultSampleRate, int channels = DefaultChannels)
             => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate, channels);

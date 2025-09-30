@@ -200,12 +200,12 @@ namespace AstrOS
                     ? AudioClip.Load(path)
                     : AudioClip.CreateSine(180, 4.5, 0.2f);
 
-                _ambientHandle = _musicBus.Play(ambientClip, new AudioPlaybackSettings
-                {
-                    Loop = true,
-                    Volume = 0.25f,
-                    FadeInSeconds = 1.0
-                });
+                // _ambientHandle = _musicBus.Play(ambientClip, new AudioPlaybackSettings
+                // {
+                //     Loop = true,
+                //     Volume = 0.25f,
+                //     FadeInSeconds = 1.0
+                // });
             }
             catch (Exception ex)
             {

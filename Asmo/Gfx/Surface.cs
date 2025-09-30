@@ -16,7 +16,20 @@ namespace Asmo.Gfx
             Height = height;
             Pixels = pixels;
         }
-
+        /// <summary>
+        /// Measures the width and height of a string in the default font (5x7, 6px per char, 7px height).
+        /// </summary>
+        public (int Width, int Height) MeasureText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return (0, 0);
+            var lines = text.Split('\n');
+            int maxLine = 0;
+            foreach (var line in lines)
+                if (line.Length > maxLine) maxLine = line.Length;
+            int width = maxLine * 6;
+            int height = lines.Length * 18; // 18px line spacing as in DrawText
+            return (width, height);
+        }
         /// <summary>
         /// Create a sprite from a width, height, and an array of 32-bit ARGB or RGBA values.
         /// </summary>
