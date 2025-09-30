@@ -87,6 +87,37 @@ namespace Asmo.Gfx
 
     public class Surface
     {
+        // Dirty rectangle tracking for minimal updates
+        private int dirtyX0 = int.MaxValue, dirtyY0 = int.MaxValue, dirtyX1 = int.MinValue, dirtyY1 = int.MinValue;
+        public bool IsDirty => dirtyX0 <= dirtyX1 && dirtyY0 <= dirtyY1;
+
+        /// <summary>
+        /// Get the current dirty rectangle. Returns (x, y, w, h). If not dirty, returns (0,0,0,0).
+        /// </summary>
+        public (int x, int y, int w, int h) GetDirtyRect()
+        {
+            if (!IsDirty) return (0, 0, 0, 0);
+            return (dirtyX0, dirtyY0, dirtyX1 - dirtyX0 + 1, dirtyY1 - dirtyY0 + 1);
+        }
+
+
+        /// <summary>
+        /// Reset the dirty rectangle after uploading changes.
+        /// </summary>
+        public void ClearDirty()
+        {
+            dirtyX0 = int.MaxValue; dirtyY0 = int.MaxValue; dirtyX1 = int.MinValue; dirtyY1 = int.MinValue;
+        }
+
+        private void MarkDirty(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height) return;
+            if (x < dirtyX0) dirtyX0 = x;
+            if (x > dirtyX1) dirtyX1 = x;
+            if (y < dirtyY0) dirtyY0 = y;
+            if (y > dirtyY1) dirtyY1 = y;
+        }
+    
         public int Width { get; }
         public int Height { get; }
         // left null for now
@@ -135,7 +166,10 @@ namespace Asmo.Gfx
         public void SetPixel(int x, int y, Color color)
         {
             if (x >= 0 && x < Width && y >= 0 && y < Height)
+            {
                 Pixels[x][y] = color;
+                MarkDirty(x, y);
+            }
         }
 
         public void Clear(Color color)
@@ -143,6 +177,8 @@ namespace Asmo.Gfx
             for (int x = 0; x < Width; x++)
                 for (int y = 0; y < Height; y++)
                     Pixels[x][y] = color;
+            // Mark the whole surface as dirty
+            dirtyX0 = 0; dirtyY0 = 0; dirtyX1 = Width - 1; dirtyY1 = Height - 1;
         }
 
         public void DrawRect(int x, int y, int w, int h, Color color)
@@ -150,6 +186,9 @@ namespace Asmo.Gfx
             for (int ix = x; ix < x + w; ix++)
                 for (int iy = y; iy < y + h; iy++)
                     SetPixel(ix, iy, color);
+            // Mark the affected region as dirty
+            MarkDirty(x, y);
+            MarkDirty(x + w - 1, y + h - 1);
         }
 
         public void DrawSprite(Sprite sprite, int x, int y)

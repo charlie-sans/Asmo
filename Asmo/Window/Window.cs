@@ -21,7 +21,17 @@ namespace Asmo.Window
         private int _shaderProgram;
         private int _vao, _vbo;
         private int _width = GameEnvironment.ScreenWidth, _height = GameEnvironment.ScreenHeight;
-        public Surface framebuffer;
+    public Surface framebuffer;
+    // Persistent buffer for texture uploads
+    private byte[] _uploadBuffer;
+    // Optional: PBO for async texture uploads (advanced)
+    private int _pbo = 0;
+    // Hybrid renderer support
+    public Asmo.Gfx.IRenderer _renderer;
+    private Asmo.Gfx.SoftwareRenderer _softwareRenderer;
+    private Asmo.Gfx.HardwareRenderer _hardwareRenderer;
+    public enum RendererType { Software, Hardware }
+    public RendererType CurrentRendererType { get; private set; } = RendererType.Hardware;
         private ConsoleHost consoleHost;
         private HomeScreenDisplay display = new HomeScreenDisplay();
 
@@ -39,6 +49,22 @@ namespace Asmo.Window
             framebuffer = new Surface(_width, _height);
             framebuffer.Window = this;
             consoleHost = new ConsoleHost();
+            // Initialize both renderers
+            _softwareRenderer = new Asmo.Gfx.SoftwareRenderer(framebuffer);
+            _hardwareRenderer = new Asmo.Gfx.HardwareRenderer();
+            _renderer = _hardwareRenderer;
+        }
+
+        /// <summary>
+        /// Switch between hardware and software renderer at runtime.
+        /// </summary>
+        public void SetRenderer(RendererType type)
+        {
+            if (type == RendererType.Hardware)
+                _renderer = _hardwareRenderer;
+            else
+                _renderer = _softwareRenderer;
+            CurrentRendererType = type;
         }
         protected override void OnClosing(CancelEventArgs e)
         {
@@ -60,6 +86,7 @@ namespace Asmo.Window
         }
         protected override void OnLoad()
         {
+            OpenTK.Graphics.OpenGL.GL.LoadBindings(new OpenTK.Windowing.GraphicsLibraryFramework.GLFWBindingsContext());
             base.OnLoad();
             // Setup OpenGL state
             GL.ClearColor(0f, 0f, 0f, 1f);
@@ -101,6 +128,13 @@ namespace Asmo.Window
             framebuffer = new Surface(_width, _height);
             framebuffer.Window = this;
             consoleHost = new ConsoleHost();
+            // Allocate persistent upload buffer
+            _uploadBuffer = new byte[_width * _height * 4];
+            // Create a PBO for async uploads
+            _pbo = GL.GenBuffer();
+            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
+            GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
+            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
             // Set the window title
             Title = "Asmo Game Console";
             // Set the window size to a multiple of framebuffer (e.g., 2x)
@@ -125,32 +159,49 @@ namespace Asmo.Window
                 _height = Math.Max(_height, y + ph);
                 GL.BindTexture(TextureTarget.Texture2D, _texture);
                 GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, _width, _height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+                // Resize upload buffer and PBO
+                _uploadBuffer = new byte[_width * _height * 4];
+                GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
+                GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
+                GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
             }
-            // Read back the current texture data (or keep a persistent buffer)
-            byte[] data = new byte[_width * _height * 4];
-            GL.BindTexture(TextureTarget.Texture2D, _texture);
-            GL.GetTexImage(TextureTarget.Texture2D, 0, PixelFormat.Rgba, PixelType.UnsignedByte, data);
-            // Copy pixels into the buffer at (x, y)
-            for (int py = 0; py < ph; py++)
+
+            // Use dirty rectangle to minimize updates
+            if (surface.IsDirty)
             {
-                // Flip Y: OpenGL expects (0,0) at bottom-left, Surface is top-left
-                int flippedY = ph - 1 - py;
-                int dy = y + flippedY;
-                if (dy < 0 || dy >= _height) continue;
-                for (int px = 0; px < pw; px++)
+                var (dirtyX, dirtyY, dirtyW, dirtyH) = surface.GetDirtyRect();
+                if (dirtyW > 0 && dirtyH > 0)
                 {
-                    int dx = x + px;
-                    if (dx < 0 || dx >= _width) continue;
-                    int i = (dy * _width + dx) * 4;
-                    var c = pixels[px][py];
-                    data[i + 0] = (byte)c.R;
-                    data[i + 1] = (byte)c.G;
-                    data[i + 2] = (byte)c.B;
-                    data[i + 3] = (byte)c.A;
+                    // Use persistent buffer for dirty region
+                    int stride = dirtyW * 4;
+                    for (int py = 0; py < dirtyH; py++)
+                    {
+                        int srcY = dirtyY + py;
+                        int flippedY = ph - 1 - srcY;
+                        if (flippedY < 0 || flippedY >= ph) continue;
+                        for (int px = 0; px < dirtyW; px++)
+                        {
+                            int srcX = dirtyX + px;
+                            if (srcX < 0 || srcX >= pw) continue;
+                            int i = (py * dirtyW + px) * 4;
+                            var c = pixels[srcX][flippedY];
+                            _uploadBuffer[i + 0] = (byte)c.R;
+                            _uploadBuffer[i + 1] = (byte)c.G;
+                            _uploadBuffer[i + 2] = (byte)c.B;
+                            _uploadBuffer[i + 3] = (byte)c.A;
+                        }
+                    }
+                    GL.BindTexture(TextureTarget.Texture2D, _texture);
+                    // Use PBO for async upload
+                    GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
+                    IntPtr ptr = GL.MapBuffer(BufferTarget.PixelUnpackBuffer, BufferAccess.WriteOnly);
+                    System.Runtime.InteropServices.Marshal.Copy(_uploadBuffer, 0, ptr, dirtyW * dirtyH * 4);
+                    GL.UnmapBuffer(BufferTarget.PixelUnpackBuffer);
+                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, dirtyX, dirtyY, dirtyW, dirtyH, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+                    GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
                 }
+                surface.ClearDirty();
             }
-            // Upload the updated buffer
-            GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, _width, _height, PixelFormat.Rgba, PixelType.UnsignedByte, data);
         }
 
         protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
@@ -177,6 +228,7 @@ namespace Asmo.Window
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
+                // Pass the current renderer and window size to HomeScreenDisplay
                 display.RenderHomeScreen(args, framebuffer);
             }
             else
