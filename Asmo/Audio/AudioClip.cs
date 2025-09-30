@@ -86,13 +86,13 @@ namespace Asmo.Audio
         /// Generates a sine wave clip procedurally.
         /// </summary>
         public static AudioClip CreateSine(double frequency, double durationSeconds, float amplitude = 0.5f, int sampleRate = DefaultSampleRate)
-            => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate);
+            => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate, DefaultChannels);
 
         /// <summary>
         /// Generates a square wave clip procedurally.
         /// </summary>
         public static AudioClip CreateSquare(double frequency, double durationSeconds, float amplitude = 0.4f, int sampleRate = DefaultSampleRate)
-            => GenerateProcedural((t, _) => MathF.Sign(MathF.Sin((float)(2 * Math.PI * frequency * t))) * amplitude, durationSeconds, sampleRate);
+            => GenerateProcedural((t, _) => MathF.Sign(MathF.Sin((float)(2 * Math.PI * frequency * t))) * amplitude, durationSeconds, sampleRate, DefaultChannels);
 
         /// <summary>
         /// Generates white noise clip procedurally.
@@ -100,27 +100,39 @@ namespace Asmo.Audio
         public static AudioClip CreateNoise(double durationSeconds, float amplitude = 0.2f, int sampleRate = DefaultSampleRate)
         {
             var random = new Random();
-            return GenerateProcedural((_, __) => (float)((random.NextDouble() * 2.0 - 1.0) * amplitude), durationSeconds, sampleRate);
+            return GenerateProcedural((_, __) => (float)((random.NextDouble() * 2.0 - 1.0) * amplitude), durationSeconds, sampleRate, DefaultChannels);
         }
 
-        private static AudioClip GenerateProcedural(Func<double, int, float> generator, double durationSeconds, int sampleRate)
+        public static AudioClip CreateSine(double frequency, double durationSeconds, float amplitude = 0.5f, int sampleRate = DefaultSampleRate, int channels = DefaultChannels)
+            => GenerateProcedural((t, _) => (float)(amplitude * Math.Sin(2 * Math.PI * frequency * t)), durationSeconds, sampleRate, channels);
+
+        public static AudioClip CreateSquare(double frequency, double durationSeconds, float amplitude = 0.4f, int sampleRate = DefaultSampleRate, int channels = DefaultChannels)
+            => GenerateProcedural((t, _) => MathF.Sign(MathF.Sin((float)(2 * Math.PI * frequency * t))) * amplitude, durationSeconds, sampleRate, channels);
+
+        public static AudioClip CreateNoise(double durationSeconds, float amplitude = 0.2f, int sampleRate = DefaultSampleRate, int channels = DefaultChannels)
+        {
+            var random = new Random();
+            return GenerateProcedural((_, __) => (float)((random.NextDouble() * 2.0 - 1.0) * amplitude), durationSeconds, sampleRate, channels);
+        }
+
+        private static AudioClip GenerateProcedural(Func<double, int, float> generator, double durationSeconds, int sampleRate, int channels)
         {
             if (durationSeconds <= 0) throw new ArgumentOutOfRangeException(nameof(durationSeconds));
+            if (channels <= 0) throw new ArgumentOutOfRangeException(nameof(channels));
 
             int totalFrames = (int)Math.Ceiling(durationSeconds * sampleRate);
-            float[] data = new float[totalFrames * DefaultChannels];
+            float[] data = new float[totalFrames * channels];
             for (int frame = 0; frame < totalFrames; frame++)
             {
                 double t = frame / (double)sampleRate;
                 float value = generator(t, frame);
-                int leftIndex = frame * DefaultChannels;
-                data[leftIndex] = value;
-                if (DefaultChannels > 1)
+                int leftIndex = frame * channels;
+                for (int ch = 0; ch < channels; ch++)
                 {
-                    data[leftIndex + 1] = value;
+                    data[leftIndex + ch] = value;
                 }
             }
-            return new AudioClip(data, sampleRate, DefaultChannels);
+            return new AudioClip(data, sampleRate, channels);
         }
 
         private static float[] ReadAllSamples(ISampleSource source)

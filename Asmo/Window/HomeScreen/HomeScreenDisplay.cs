@@ -1,4 +1,7 @@
 ﻿using OpenTK.Windowing.Common;
+using System.Threading;
+using Asmo.Sound;
+using Asmo.Audio;
 using System;
 using System.IO;
 using Asmo.Window.input;
@@ -37,10 +40,38 @@ namespace Asmo.Window.HomeScreen
         private float[] frameTimes = new float[FrameGraphSamples];
         private int frameTimeIndex = 0;
 
+
+        // Audio fields for boot chime
+        private static bool bootChimePlayed = false;
+        private static AudioEngine? audioEngine = null;
+
         public HomeScreenDisplay()
         {
             GameEnvironment.ShowFps = false;
-            
+
+            // Play boot chime only once per app run
+            if (!bootChimePlayed)
+            {
+                try
+                {
+                    if (audioEngine == null)
+                        audioEngine = new AudioEngine();
+
+                    // Use default stereo channels for compatibility
+                    int sampleRate = AudioClip.DefaultSampleRate;
+                    int channels = AudioClip.DefaultChannels;
+                    // audioEngine.PlayClip(AudioClip.CreateSquare(523.25, 0.10, 0.25f, sampleRate, channels), "master"); // C5
+                    // // Thread.Sleep(150);
+                    // audioEngine.PlayClip(AudioClip.CreateSquare(659.25, 0.10, 0.20f, sampleRate, channels), "master"); // E5
+                    // // Thread.Sleep(150);
+                    // audioEngine.PlayClip(AudioClip.CreateSquare(783.99, 0.18, 0.18f, sampleRate, channels), "master"); // G5
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Boot chime failed: {ex.Message}");
+                }
+                bootChimePlayed = true;
+            }
         }
 
     public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
@@ -77,7 +108,12 @@ namespace Asmo.Window.HomeScreen
             int panelX = (framebuffer.Width - panelW) / 2;
             int panelY = (framebuffer.Height - panelH) / 2;
             framebuffer.DrawOutlinedRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8, Colors.Cyan);
-            framebuffer.DrawRect(panelX, panelY, panelW, panelH, new Asmo.Types.Color(16, 16, 32, 220));
+            // Gradient panel background
+            framebuffer.DrawVerticalGradientRect(
+                panelX, panelY, panelW, panelH,
+                new Asmo.Types.Color(16, 16, 48, 220), // top color
+                new Asmo.Types.Color(32, 32, 64, 220)  // bottom color
+            );
 
             int y = panelY + 18;
             framebuffer.DrawText(panelX + 20, y, $"ASMO GAME CONSOLE", Colors.Yellow); y += 20;
@@ -93,18 +129,9 @@ namespace Asmo.Window.HomeScreen
             int buttonY = y + 8;
             Asmo.Gui.Gui.Begin(buttonX, buttonY);
             bool mouseDown = mouse != null && framebuffer.Window.IsMouseButtonDown(OpenTK.Windowing.GraphicsLibraryFramework.MouseButton.Left);
-            int altW = 320, altH = 180;
-            if (Asmo.Gui.Gui.Button(framebuffer, "Framebuffer Resize Test", Colors.Magenta, mouseX, mouseY, mouseDown))
+            if (Asmo.Gui.Gui.Button(framebuffer, "Toggle Debug Overlay", Colors.Magenta, mouseX, mouseY, mouseDown))
             {
-                var window = framebuffer.Window;
-                if (window is Asmo.Window.Window win2)
-                {
-                    if (!resizeToggled)
-                        win2.ResizeFrameBuffer(altW, altH);
-                    else
-                        win2.ResizeFrameBuffer(GameEnvironment.ScreenWidth, GameEnvironment.ScreenHeight);
-                    resizeToggled = !resizeToggled;
-                }
+                Asmo.DebugOverlay.Current?.Toggle();
             }
 
             y += 32;

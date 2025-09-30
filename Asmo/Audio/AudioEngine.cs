@@ -47,7 +47,7 @@ namespace Asmo.Audio
 
             // Start audio buffer fill thread
             _audioThreadRunning = true;
-            _audioThread = new System.Threading.Thread(AudioThreadLoop) { IsBackground = false };
+            _audioThread = new System.Threading.Thread(AudioThreadLoop) { IsBackground = true };
             _audioThread.Start();
         }
 
@@ -89,7 +89,7 @@ namespace Asmo.Audio
         public void Update(double deltaTime)
         {
             if (_disposed) return;
-            MasterBus.Update(deltaTime);
+            // No audio update here; handled in audio thread
         }
 
         public void Dispose()
@@ -122,12 +122,21 @@ namespace Asmo.Audio
             int channels = _mixer.WaveFormat.Channels;
             int chunkSize = 2048 * 4; // ~12ms at 44.1kHz stereo
             float[] temp = new float[chunkSize];
+            double chunkDuration = (double)chunkSize / (channels * _mixer.WaveFormat.SampleRate);
+            var thread = System.Threading.Thread.CurrentThread;
+            try { thread.Priority = System.Threading.ThreadPriority.AboveNormal; } catch { }
             while (_audioThreadRunning)
             {
+                MasterBus.Update(chunkDuration);
                 int samples = _mixer.Read(temp, 0, chunkSize);
                 if (samples > 0)
                 {
                     _buffer.Write(temp, 0, samples);
+                }
+                // Underrun diagnostics
+                if (_buffer.Count < chunkSize)
+                {
+                    AudioDiagnostics.Log($"[AudioEngine] Buffer underrun: only {_buffer.Count} samples available.");
                 }
                 // System.Threading.Thread.Sleep(2); // Tune for latency/cpu
             }
@@ -138,6 +147,16 @@ namespace Asmo.Audio
             if (!_outputInitialized)
             {
                 AudioDiagnostics.Log("Initialising audio output device (WasapiOut, default latency).");
+                // Pre-fill buffer before starting playback
+                int channels = _mixer.WaveFormat.Channels;
+                int chunkSize = 2048 * 4;
+                float[] temp = new float[chunkSize];
+                for (int i = 0; i < 8; i++) // Fill with 8 chunks
+                {
+                    int samples = _mixer.Read(temp, 0, chunkSize);
+                    if (samples > 0)
+                        _buffer.Write(temp, 0, samples);
+                }
                 _output.Initialize(_waveSource);
                 _outputInitialized = true;
             }

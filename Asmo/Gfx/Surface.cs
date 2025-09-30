@@ -22,34 +22,34 @@ namespace Asmo.Gfx
         /// </summary>
         public static Sprite FromArgbArray(int width, int height, int[] pixels, bool isRgba = true)
         {
-            var arr = new Color[width][];
-            for (int x = 0; x < width; x++)
-            {
-                arr[x] = new Color[height];
-                for (int y = 0; y < height; y++)
-                {
-                    int idx = y * width + x;
-                    int val = pixels[idx];
-                    byte a, r, g, b;
-                    if (isRgba)
-                    {
-                        r = (byte)((val >> 24) & 0xFF);
-                        g = (byte)((val >> 16) & 0xFF);
-                        b = (byte)((val >> 8) & 0xFF);
-                        a = (byte)(val & 0xFF);
-                    }
-                    else // ARGB
-                    {
-                        a = (byte)((val >> 24) & 0xFF);
-                        r = (byte)((val >> 16) & 0xFF);
-                        g = (byte)((val >> 8) & 0xFF);
-                        b = (byte)(val & 0xFF);
-                    }
-                    arr[x][y] = new Color(r, g, b, a);
-                }
-            }
-            return new Sprite(width, height, arr);
-        }
+			var arr = new Color[width][];
+			for (int x = 0; x < width; x++)
+			{
+				arr[x] = new Color[height];
+				for (int y = 0; y < height; y++)
+				{
+					int idx = y * width + x;
+					int val = pixels[idx];
+					byte a, r, g, b;
+					if (isRgba)
+					{
+						r = (byte)((val >> 24) & 0xFF);
+						g = (byte)((val >> 16) & 0xFF);
+						b = (byte)((val >> 8) & 0xFF);
+						a = (byte)(val & 0xFF);
+					}
+					else // ARGB
+					{
+						a = (byte)((val >> 24) & 0xFF);
+						r = (byte)((val >> 16) & 0xFF);
+						g = (byte)((val >> 8) & 0xFF);
+						b = (byte)(val & 0xFF);
+					}
+					arr[x][y] = new Color(r, g, b, a);
+				}
+			}
+			return new Sprite(width, height, arr);
+		}
 
         /// <summary>
         /// Create a sprite from a width, height, and a byte array (RGBA or ARGB, 4 bytes per pixel)
@@ -85,8 +85,34 @@ namespace Asmo.Gfx
         }
     }
 
+    // End of Sprite class
+}
+
+namespace Asmo.Gfx
+{
+
     public class Surface
     {
+        /// <summary>
+        /// Draw a rectangle filled with a vertical gradient from colorTop to colorBottom.
+        /// </summary>
+        public void DrawVerticalGradientRect(int x, int y, int width, int height, Asmo.Types.Color colorTop, Asmo.Types.Color colorBottom)
+        {
+            for (int iy = 0; iy < height; iy++)
+            {
+                float t = height > 1 ? iy / (float)(height - 1) : 0f;
+                byte r = (byte)(colorTop.R + t * (colorBottom.R - colorTop.R));
+                byte g = (byte)(colorTop.G + t * (colorBottom.G - colorTop.G));
+                byte b = (byte)(colorTop.B + t * (colorBottom.B - colorTop.B));
+                byte a = (byte)(colorTop.A + t * (colorBottom.A - colorTop.A));
+                var rowColor = new Asmo.Types.Color(r, g, b, a);
+                for (int ix = 0; ix < width; ix++)
+                {
+                    SetPixel(x + ix, y + iy, rowColor);
+                }
+            }
+        }
+
         // Dirty rectangle tracking for minimal updates
         private int dirtyX0 = int.MaxValue, dirtyY0 = int.MaxValue, dirtyX1 = int.MinValue, dirtyY1 = int.MinValue;
         public bool IsDirty => dirtyX0 <= dirtyX1 && dirtyY0 <= dirtyY1;
@@ -99,7 +125,6 @@ namespace Asmo.Gfx
             if (!IsDirty) return (0, 0, 0, 0);
             return (dirtyX0, dirtyY0, dirtyX1 - dirtyX0 + 1, dirtyY1 - dirtyY0 + 1);
         }
-
 
         /// <summary>
         /// Reset the dirty rectangle after uploading changes.
@@ -117,7 +142,7 @@ namespace Asmo.Gfx
             if (y < dirtyY0) dirtyY0 = y;
             if (y > dirtyY1) dirtyY1 = y;
         }
-    
+
         public int Width { get; }
         public int Height { get; }
         // left null for now
@@ -148,6 +173,7 @@ namespace Asmo.Gfx
 
         public void DrawText(int x, int y, string text, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             for (int i = 0; i < text.Length; i++)
             {
                 int px = x + i * 6;
@@ -183,6 +209,7 @@ namespace Asmo.Gfx
 
         public void DrawRect(int x, int y, int w, int h, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             for (int ix = x; ix < x + w; ix++)
                 for (int iy = y; iy < y + h; iy++)
                     SetPixel(ix, iy, color);
@@ -193,6 +220,7 @@ namespace Asmo.Gfx
 
         public void DrawSprite(Sprite sprite, int x, int y)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             for (int sx = 0; sx < sprite.Width; sx++)
                 for (int sy = 0; sy < sprite.Height; sy++)
                 {
@@ -215,6 +243,7 @@ namespace Asmo.Gfx
         /// </summary>
         public void DrawSpriteRegion(Sprite sprite, int x, int y, int srcX, int srcY, int srcW, int srcH)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             for (int sx = 0; sx < srcW; sx++)
                 for (int sy = 0; sy < srcH; sy++)
                 {
@@ -232,6 +261,7 @@ namespace Asmo.Gfx
         // Draw a line using Bresenham's algorithm
         public void DrawLine(int x0, int y0, int x1, int y1, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             int dx = Math.Abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
             int dy = -Math.Abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
             int err = dx + dy, e2;
@@ -248,6 +278,7 @@ namespace Asmo.Gfx
         // Draw a circle (midpoint algorithm)
         public void DrawCircle(int cx, int cy, int radius, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             int x = radius, y = 0, err = 0;
             while (x >= y)
             {
@@ -264,6 +295,7 @@ namespace Asmo.Gfx
         // Draw a filled circle
         public void DrawFilledCircle(int cx, int cy, int radius, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             for (int y = -radius; y <= radius; y++)
                 for (int x = -radius; x <= radius; x++)
                     if (x * x + y * y <= radius * radius)
@@ -273,6 +305,7 @@ namespace Asmo.Gfx
         // Draw an outlined rectangle
         public void DrawOutlinedRect(int x, int y, int w, int h, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             DrawLine(x, y, x + w - 1, y, color);
             DrawLine(x, y, x, y + h - 1, color);
             DrawLine(x + w - 1, y, x + w - 1, y + h - 1, color);
@@ -282,6 +315,7 @@ namespace Asmo.Gfx
         // Draw an ellipse (outline)
         public void DrawEllipse(int cx, int cy, int rx, int ry, Color color)
         {
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             int x, y;
             int rx2 = rx * rx, ry2 = ry * ry;
             int tworx2 = 2 * rx2, twory2 = 2 * ry2;

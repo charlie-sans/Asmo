@@ -16,6 +16,8 @@ namespace AudioDemo
         private AudioEngine? _audio;
         private AudioHandle? _handle;
         private string _lastEvent = "Press Space to play SFX.";
+        private DebugOverlay _debugOverlay = new DebugOverlay();
+        private Asmo.Window.input.Keyboard? _keyboard;
 
         public void Init(Surface surface)
         {
@@ -29,14 +31,25 @@ namespace AudioDemo
                 File.AppendAllText(logPath, msg + Environment.NewLine, logEncoding);
             };
 
-            var sine = AudioClip.CreateSine(440, 3.0, 0.5f);
-            _handle = _audio.MasterBus.Play(sine, new AudioPlaybackSettings { Volume = 0.7f });
+            // Try to get keyboard from surface.Window if available
+            if (surface.Window != null)
+                _keyboard = new Asmo.Window.input.Keyboard(surface.Window);
+            if (_keyboard != null)
+                _debugOverlay.SetKeyboard(_keyboard);
+
             _lastEvent = "Sine wave started.";
         }
 
         public void Update(double deltaTime)
         {
+            _debugOverlay.BeginFrame();
             _audio?.Update(deltaTime);
+            _keyboard?.Update();
+            if (_keyboard != null && _keyboard.IsKeyPressed(OpenTK.Windowing.GraphicsLibraryFramework.Keys.F3))
+            {
+                _debugOverlay.Toggle();
+            }
+            _debugOverlay.EndFrame();
         }
 
         public void Draw(Surface surface)
@@ -44,6 +57,7 @@ namespace AudioDemo
             surface.Clear(Colors.DarkBlue);
             surface.DrawText(20, 20, "Minimal Audio Demo", Colors.Yellow);
             surface.DrawText(20, 40, _lastEvent, Colors.White);
+            _debugOverlay.Render(surface);
         }
     }
 }

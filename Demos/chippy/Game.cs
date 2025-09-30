@@ -11,8 +11,12 @@ using OpenTK.Windowing.GraphicsLibraryFramework;
 namespace Chippy
 {
     // Chippy, a chiptune tracker for Asmo
+
     public class Game : IConsoleGame
     {
+        // Cache for background gradient row colors
+        private static Color[] gradientCache = null;
+
         private const int PatternRows = 32;
         private const int PatternChannels = 8;
         private const double BeatsPerStep = 0.25; // Sixteenth notes at the current tempo
@@ -21,14 +25,11 @@ namespace Chippy
         private const int EffectLowFieldIndex = 2;
         private const int ChannelColumnWidth = 60;
         private const int NoteColumnWidth = 18;
-    private const int EffectColumnWidth = 30;
-    private const double MinNoteDurationSeconds = 0.05;
-    private const double MinReleaseSeconds = 0.9;
-    private const double MaxReleaseSeconds = 2;
+        private const int EffectColumnWidth = 30;
+        private const double MinNoteDurationSeconds = 0.05;
+        private const double MinReleaseSeconds = 0.9;
+        private const double MaxReleaseSeconds = 2;
 
-        private readonly Instrument[] instruments;
-        private readonly float[] instrumentAmps = { 0.7f, 0.55f, 0.85f, 0.45f };
-        private readonly string[] instrumentNames = { "Square Lead", "Triangle", "Bass", "Noise" };
         private readonly Color[] instrumentColors =
         {
             Colors.Cyan,
@@ -37,13 +38,15 @@ namespace Chippy
             Colors.Orange
         };
 
-    private Keyboard keyboard = null!;
-    private AudioEngine audioEngine = null!;
-    private AudioBus chippyBus = null!;
-    private readonly List<AudioHandle> activeVoices = new();
-    private readonly Queue<QueuedNote> oneShotQueue = new();
-    private readonly AudioHandle[] channelVoices = new AudioHandle[PatternChannels];
-    private bool isInitialized;
+        private Keyboard keyboard = null!;
+        private Mouse mouse = null!;
+        private AudioEngine audioEngine = null!;
+        private AudioBus chippyBus = null!;
+        private readonly List<AudioHandle> activeVoices = new();
+        private readonly Queue<QueuedNote> oneShotQueue = new();
+        private readonly AudioHandle[] channelVoices = new AudioHandle[PatternChannels];
+        private readonly bool[] channelMute = new bool[PatternChannels];
+        private bool isInitialized;
         private readonly TrackerPattern pattern = new(PatternRows, PatternChannels);
 
         private int cursorRow;
@@ -95,9 +98,13 @@ namespace Chippy
             { Keys.F, 0xF }
         };
 
+
+        private readonly Instrument[] instruments;
+        private static readonly string[] instrumentNames = new[] { "Square", "Triangle", "Bass", "Noise" };
+        private static readonly float[] instrumentAmps = new[] { 1.0f, 1.0f, 1.0f, 1.0f };
+
         public Game()
         {
-            
             instruments = new Instrument[]
             {
                 CreateSquareInstrument(),
@@ -110,6 +117,7 @@ namespace Chippy
         public void Init(Surface surface)
         {
             keyboard = new Keyboard(surface.Window);
+            mouse = new Mouse(surface.Window);
             audioEngine = new AudioEngine();
             chippyBus = audioEngine.GetOrCreateBus("chippy");
             chippyBus.Volume = 0.85f;
@@ -127,6 +135,16 @@ namespace Chippy
                 return;
             }
 
+            // --- Layout variables for tracker and mixer (shared with Draw) ---
+            int visibleRows = Math.Min(PatternRows, 28);
+            int highlightWidth = PatternChannels * ChannelColumnWidth + 40;
+            int rowHeight = 9;
+            int headerHeight = rowHeight + 2;
+            int patternHeight = visibleRows * rowHeight + headerHeight;
+            int patternX = (640 - (highlightWidth + 12)) / 2; // fallback width, adjust if you have actual surface width
+            int patternY = 58 - headerHeight - 8;
+            int mixerY = patternY + patternHeight + 28;
+
             UpdateBlink(deltaTime);
             HandleInput();
             AdvancePlayback(deltaTime);
@@ -134,14 +152,90 @@ namespace Chippy
 
             keyboard.Update();
             audioEngine.Update(deltaTime);
+
+            // --- Mixer mute button click logic ---
+            if (mouse != null && mouse.IsPressed)
+            {
+                for (int channel = 0; channel < PatternChannels; channel++)
+                {
+                    int channelX = patternX + 38 + channel * ChannelColumnWidth;
+                    int muteBtnX = channelX + 16;
+                    int muteBtnY = mixerY + 12;
+                    if (mouse.X >= muteBtnX && mouse.X < muteBtnX + 16 && mouse.Y >= muteBtnY && mouse.Y < muteBtnY + 16)
+                    {
+                        channelMute[channel] = !channelMute[channel];
+                    }
+                }
+            }
         }
 
         public void Draw(Surface surface)
         {
-            surface.Clear(Colors.Black);
+            // --- Optimized Background: cache gradient row colors ---
+            if (gradientCache == null || gradientCache.Length != surface.Height)
+            {
+                gradientCache = new Color[surface.Height];
+                for (int y = 0; y < surface.Height; y++)
+                {
+                    int r = 16 + (int)(32 * y / (float)surface.Height);
+                    int g = 18 + (int)(36 * y / (float)surface.Height);
+                    int b = 32 + (int)(48 * y / (float)surface.Height);
+                    gradientCache[y] = new Color(r, g, b, 255);
+                }
+            }
+            for (int y = 0; y < surface.Height; y++)
+            {
+                Color rowColor = gradientCache[y];
+                for (int x = 0; x < surface.Width; x++)
+                    surface.SetPixel(x, y, rowColor);
+            }
 
-            DrawHeader(surface);
-            DrawPattern(surface);
+            // Center the tracker pattern horizontally
+            int visibleRows = Math.Min(PatternRows, 28);
+            int highlightWidth = PatternChannels * ChannelColumnWidth + 40;
+            int rowHeight = 9;
+            int headerHeight = rowHeight + 2;
+            int patternHeight = visibleRows * rowHeight + headerHeight;
+            int patternX = (surface.Width - (highlightWidth + 12)) / 2;
+            int patternY = 58 - headerHeight - 8;
+
+            // --- Title Bar ---
+            int titleBarHeight = 28;
+            surface.DrawRect(patternX - 12, patternY - titleBarHeight - 8, highlightWidth + 36, titleBarHeight, new Color(32, 36, 56, 255));
+            surface.DrawText(patternX + 12, patternY - titleBarHeight - 2, "Chippy Tracker", Colors.Yellow);
+
+            // --- Tracker Background ---
+            surface.DrawRect(patternX - 12, patternY - 12, highlightWidth + 36, patternHeight + 32, new Color(18, 20, 32, 255));
+
+            // --- Tracker Pattern ---
+            DrawPattern(surface, patternX + 10);
+
+            // --- Mixer UI ---
+            int mixerY = patternY + patternHeight + 28;
+            int mixerHeight = 40;
+            surface.DrawRect(patternX - 12, mixerY, highlightWidth + 36, mixerHeight, new Color(24, 26, 38, 255));
+            for (int channel = 0; channel < PatternChannels; channel++)
+            {
+                int channelX = patternX + 38 + channel * ChannelColumnWidth;
+                // Draw volume bar (dummy value for now)
+                int volBarHeight = 24;
+                int volBarWidth = 8;
+                int volBarY = mixerY + 8;
+                int vol = channelMute[channel] ? 0 : 18; // Show 0 if muted
+                surface.DrawRect(channelX, volBarY + (volBarHeight - vol), volBarWidth, vol, channelMute[channel] ? Colors.DarkGray : Colors.Green);
+                surface.DrawOutlinedRect(channelX, volBarY, volBarWidth, volBarHeight, Colors.DarkGray);
+                // Draw mute button (clickable)
+                int muteBtnX = channelX + 16;
+                int muteBtnY = mixerY + 12;
+                bool mouseOverMute = mouse != null && mouse.X >= muteBtnX && mouse.X < muteBtnX + 16 && mouse.Y >= muteBtnY && mouse.Y < muteBtnY + 16;
+                Color muteColor = channelMute[channel]
+                    ? (mouseOverMute ? new Color(180, 60, 60, 255) : new Color(120, 30, 30, 255))
+                    : (mouseOverMute ? new Color(90, 90, 90, 255) : new Color(60, 60, 60, 255));
+                surface.DrawRect(muteBtnX, muteBtnY, 16, 16, muteColor);
+                surface.DrawText(muteBtnX + 2, muteBtnY + 2, channelMute[channel] ? "X" : "M", Colors.White);
+            }
+
+            // --- Footer ---
             DrawFooter(surface);
         }
 
@@ -712,15 +806,13 @@ namespace Chippy
 
         private void DrawHeader(Surface surface)
         {
-            surface.DrawText(10, 10, "Chippy Tracker", Colors.Yellow);
-
             string mode = isPlaying ? "PLAY" : "EDIT";
-            surface.DrawText(10, 22, $"Mode: {mode}  BPM: {bpm:0}  Octave: {currentOctave}", Colors.White);
-            surface.DrawText(10, 34, $"Instrument: {instrumentNames[currentInstrument]} (F{currentInstrument + 1})", instrumentColors[currentInstrument]);
-            surface.DrawText(10, 46, $"Follow: {(followMode ? "ON" : "OFF")}  Step: 1/4 beat (16th)", Colors.White);
+            surface.DrawText(10, 10, $"Mode: {mode}  BPM: {bpm:0}  Octave: {currentOctave}", Colors.White);
+            surface.DrawText(10, 22, $"Instrument: {instrumentNames[currentInstrument]} (F{currentInstrument + 1})", instrumentColors[currentInstrument]);
+            surface.DrawText(10, 34, $"Follow: {(followMode ? "ON" : "OFF")}  Step: 1/4 beat (16th)", Colors.White);
         }
 
-        private void DrawPattern(Surface surface)
+    private void DrawPattern(Surface surface, int originX = 10)
         {
             int visibleRows = Math.Min(PatternRows, 28);
             int anchorRow = followMode && isPlaying ? activeRow : cursorRow;
@@ -728,9 +820,28 @@ namespace Chippy
             int startRow = Math.Clamp(anchorRow - half, 0, Math.Max(0, PatternRows - visibleRows));
             int highlightWidth = PatternChannels * ChannelColumnWidth + 40;
             int rowHeight = 9;
-            int originX = 10;
             int originY = 58;
+            int headerHeight = rowHeight + 2;
 
+            // Draw border around the pattern area
+            int patternHeight = visibleRows * rowHeight + headerHeight;
+            surface.DrawOutlinedRect(originX - 8, originY - headerHeight, highlightWidth + 12, patternHeight + 6, Colors.Gray);
+
+            // Draw channel headers
+            for (int channel = 0; channel < PatternChannels; channel++)
+            {
+                int channelX = originX + 28 + channel * ChannelColumnWidth;
+                surface.DrawText(channelX, originY - headerHeight + 2, $"CH{channel + 1}", Colors.Yellow);
+            }
+
+            // Draw vertical separators between channels
+            for (int channel = 1; channel < PatternChannels; channel++)
+            {
+                int sepX = originX + 28 + channel * ChannelColumnWidth - 8;
+                surface.DrawLine(sepX, originY - headerHeight, sepX, originY + visibleRows * rowHeight, Colors.DarkGray);
+            }
+
+            // Draw pattern rows
             for (int i = 0; i < visibleRows && startRow + i < PatternRows; i++)
             {
                 int rowIndex = startRow + i;
@@ -738,6 +849,12 @@ namespace Chippy
 
                 bool playingRow = isPlaying && rowIndex == activeRow;
                 bool cursorRowActive = rowIndex == cursorRow;
+
+                // Alternating row backgrounds
+                if (i % 2 == 0)
+                {
+                    surface.DrawRect(originX - 6, y - 1, highlightWidth, rowHeight + 2, new Color(30, 30, 40, 255));
+                }
 
                 if (playingRow)
                 {
@@ -748,6 +865,7 @@ namespace Chippy
                     surface.DrawRect(originX - 6, y - 1, highlightWidth, rowHeight + 2, Colors.DarkGray);
                 }
 
+                // Row number
                 surface.DrawText(originX, y, rowIndex.ToString("00"), Colors.Gray);
 
                 for (int channel = 0; channel < PatternChannels; channel++)
