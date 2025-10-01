@@ -87,8 +87,16 @@ namespace Asmo.Window
             if (width == _width && height == _height) return;
             _width = width;
             _height = height;
-            framebuffer = new Surface(_width, _height);
-            framebuffer.Window = this;
+            // Recreate framebuffer respecting backend type
+            if (_pixelBackend is GpuPixelBuffer gpu)
+            {
+                gpu.Resize(_width, _height); // will remap buffer
+                framebuffer = new Surface(_width, _height, gpu.FrameMemory) { Window = this };
+            }
+            else
+            {
+                framebuffer = new Surface(_width, _height) { Window = this };
+            }
             // Resize backend (handles texture reallocation internally if GPU path; for CPU we handle here)
             _pixelBackend.Resize(_width, _height);
             // Transitional legacy buffers (still used by Render path until refactor complete)
@@ -117,6 +125,7 @@ namespace Asmo.Window
             framebuffer.Window = this;
             consoleHost.LoadGame(game, framebuffer);
             gameLoaded = true;
+            try { GameHistory.AddOrUpdate(game.GetType().Assembly.Location, game.GetType().Name); } catch { }
         }
         protected override void OnLoad()
         {
@@ -124,6 +133,14 @@ namespace Asmo.Window
             base.OnLoad();
             // Setup OpenGL state
             GL.ClearColor(0f, 0f, 0f, 1f);
+
+            // Ensure debug overlay exists early
+            if (Asmo.DebugOverlay.Current == null)
+            {
+                _ = new Asmo.DebugOverlay();
+                // Asmo.DebugOverlay.Current?.Show();
+                System.Diagnostics.Debug.WriteLine("[DebugOverlay] Created in Window.OnLoad");
+            }
 
             // Create texture
             _texture = GL.GenTexture();
@@ -159,6 +176,7 @@ namespace Asmo.Window
             _shaderProgram = CreateShaderProgram(Shaders.DefaultVertexShaderSource, Shaders.DefaultFragmentShaderSource);
 
             // Initialize framebuffer and console host
+            // Framebuffer will be replaced below if GPU backend selected
             framebuffer = new Surface(_width, _height) { Window = this };
             consoleHost = new ConsoleHost();
             // Allocate persistent upload buffer
@@ -178,17 +196,20 @@ namespace Asmo.Window
                 if (hasBufferStorage)
                 {
                     _pixelBackend = new GpuPixelBuffer(_width, _height, _texture);
-                    System.Diagnostics.Debug.WriteLine("[PixelBuffer] Using persistent mapped GPU backend.");
+                    framebuffer = new Surface(_width, _height, _pixelBackend.FrameMemory) { Window = this };
+                    System.Diagnostics.Debug.WriteLine("[PixelBuffer] Using persistent mapped GPU backend (span-backed framebuffer).");
                 }
                 else
                 {
                     _pixelBackend = new CpuCopyPixelBuffer(_width, _height, _texture);
+                    framebuffer = new Surface(_width, _height) { Window = this };
                     System.Diagnostics.Debug.WriteLine("[PixelBuffer] Using legacy CPU copy backend (no buffer_storage support).");
                 }
             }
             catch (Exception ex)
             {
                 _pixelBackend = new CpuCopyPixelBuffer(_width, _height, _texture);
+                framebuffer = new Surface(_width, _height) { Window = this };
                 System.Diagnostics.Debug.WriteLine($"[PixelBuffer] GPU backend unavailable, falling back to CPU: {ex.Message}");
             }
            
@@ -197,6 +218,9 @@ namespace Asmo.Window
             Size = new Vector2i(_width * scale, _height * scale);
             // Set initial viewport (will be updated in OnResize)
             UpdateViewport();
+
+            // Load recent game history
+            try { GameHistory.Load(); } catch { }
 
     }
 
@@ -226,23 +250,32 @@ namespace Asmo.Window
                 {
                     if (_pixelBackend is GpuPixelBuffer gpu)
                     {
-                        // Write Color[][] directly into mapped GPU buffer as RGBA8
-                        var span = gpu.GetSpan();
-                        int width = surface.Width, height = surface.Height;
-                        for (int py = 0; py < height; py++)
+                        if (!surface.IsSpanBacked)
                         {
-                            int flippedY = height - 1 - py; // vertical flip for GL
-                            for (int px = 0; px < width; px++)
+                            // Transitional path: copy only dirty rect into mapped buffer
+                            var span = gpu.GetSpan();
+                            int width = surface.Width;
+                            int height = surface.Height;
+                            for (int py = 0; py < dirtyH; py++)
                             {
-                                var c = pixels[px][flippedY];
-                                int i = (py * width + px) * 4;
-                                span[i + 0] = (byte)c.R;
-                                span[i + 1] = (byte)c.G;
-                                span[i + 2] = (byte)c.B;
-                                span[i + 3] = (byte)c.A;
+                                int srcY = dirtyY + py;
+                                int flippedY = height - 1 - srcY;
+                                if (flippedY < 0 || flippedY >= height) continue;
+                                for (int px = 0; px < dirtyW; px++)
+                                {
+                                    int srcX = dirtyX + px;
+                                    if (srcX < 0 || srcX >= width) continue;
+                                    var c = pixels[srcX][flippedY];
+                                    int i = (srcY * width + srcX) * 4; // write at absolute position; flip handled earlier
+                                    span[i + 0] = (byte)c.R;
+                                    span[i + 1] = (byte)c.G;
+                                    span[i + 2] = (byte)c.B;
+                                    span[i + 3] = (byte)c.A;
+                                }
                             }
                         }
-                        gpu.CommitDirty(0, 0, width, height); // full frame for now
+                        // Commit only dirty rectangle
+                        gpu.CommitDirty(dirtyX, dirtyY, dirtyW, dirtyH);
                     }
                     else if (_pixelBackend is CpuCopyPixelBuffer cpu)
                     {
@@ -257,8 +290,9 @@ namespace Asmo.Window
         protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
             base.OnRenderFrame(args);
-
-            // Upload latest framebuffer (UI, overlay, etc.) to GPU texture
+            // Render overlay (after scene/UI updates done in UpdateFrame) onto framebuffer before upload
+            Asmo.DebugOverlay.Current?.Render(framebuffer);
+            // Upload latest framebuffer (UI + overlay) to GPU texture
             Render(framebuffer, 0, 0);
 
             GL.Clear(ClearBufferMask.ColorBufferBit);
@@ -278,6 +312,7 @@ namespace Asmo.Window
         protected override void OnUpdateFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
             base.OnUpdateFrame(args);
+            Asmo.DebugOverlay.Current?.BeginFrame();
             framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
@@ -289,9 +324,27 @@ namespace Asmo.Window
                 consoleHost.Update(args.Time);
                 consoleHost.Draw(framebuffer);
             }
-            Render(framebuffer, 0, 0);
+            Asmo.DebugOverlay.Current?.EndFrame();
+            // Collect surface stats if span-backed
+            if (Asmo.DebugOverlay.Current != null && framebuffer.IsSpanBacked)
+            {
+                var (dx, dy, dw, dh) = framebuffer.GetDirtyRect();
+                Asmo.DebugOverlay.Current.UpdatePixelStats(dw * dh, _width * _height);
+            }
+            // Periodically flush history
+            GameHistory.Tick();
             // Force overlay visible every frame (workaround for accidental hiding)
-            Asmo.DebugOverlay.Current?.Show();
+            // Asmo.DebugOverlay.Current?.Show();
+        }
+
+        /// <summary>
+        /// Expose underlying frame memory if GPU backend (span-backed). Returns null otherwise.
+        /// </summary>
+        public Memory<byte>? TryGetFrameMemory()
+        {
+            if (framebuffer.IsSpanBacked && _pixelBackend != null)
+                return _pixelBackend.FrameMemory;
+            return null;
         }
 
         protected override void OnResize(OpenTK.Windowing.Common.ResizeEventArgs e)
@@ -360,6 +413,7 @@ namespace Asmo.Window
                         framebuffer.Window = this;
                         consoleHost.LoadGame(game, framebuffer);
                         gameLoaded = true;
+                        try { GameHistory.AddOrUpdate(file, gameType.Name); } catch { }
                     }
                     continue;
                 }
@@ -387,6 +441,7 @@ namespace Asmo.Window
                                 framebuffer.Window = this;
                                 consoleHost.LoadGame(game, framebuffer);
                                 gameLoaded = true;
+                                    try { GameHistory.AddOrUpdate(dll, gameType.Name); } catch { }
                                 break;
                             }
                         }

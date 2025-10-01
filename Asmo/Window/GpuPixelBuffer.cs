@@ -47,10 +47,32 @@ public sealed class GpuPixelBuffer : IPixelBufferBackend
 
     public void CommitDirty(int x, int y, int w, int h)
     {
-        // For P1, always upload the full frame
+        if (w <= 0 || h <= 0) return;
+        // Clamp (defensive)
+        if (x < 0) { w += x; x = 0; }
+        if (y < 0) { h += y; y = 0; }
+        if (x + w > _width) w = _width - x;
+        if (y + h > _height) h = _height - y;
+        if (w <= 0 || h <= 0) return;
+
         GL.BindTexture(TextureTarget.Texture2D, _texture);
         GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
-        GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, _width, _height, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+
+        // Full frame fast path
+        if (x == 0 && y == 0 && w == _width && h == _height)
+        {
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0, _width, _height, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
+        }
+        else
+        {
+            // Set row length to full texture width so we can use pointer offset into mapped buffer
+            GL.PixelStore(PixelStoreParameter.UnpackRowLength, _width);
+            int byteOffset = (y * _width + x) * 4;
+            IntPtr ptr = IntPtr.Add(IntPtr.Zero, byteOffset); // with PBO bound, this acts as offset
+            GL.TexSubImage2D(TextureTarget.Texture2D, 0, x, y, w, h, PixelFormat.Rgba, PixelType.UnsignedByte, ptr);
+            // Reset row length to default
+            GL.PixelStore(PixelStoreParameter.UnpackRowLength, 0);
+        }
         GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
     }
 

@@ -26,7 +26,7 @@ namespace Asmo.Window.HomeScreen
         private string author = "Charlie Sans";
         private string github = "https://github.com/charlie-sans/Asmo";
         private string description = "A modern C#/.NET retro/modern game console framework.";
-        private Surface _surface;
+    private Surface? _surface;
         private string[] tips = new[]
         {
             "Tip: Use the Settings Panel to change quality modes!",
@@ -40,6 +40,73 @@ namespace Asmo.Window.HomeScreen
     // Framegraph state
     private Asmo.Debug.FrameGraph homeScreenGraph = new Asmo.Debug.FrameGraph(120) { Label = "HomeScreen ms", GraphColor = Asmo.Gfx.Colors.Magenta };
 
+        // Rolling perf stats (simple running window of last 240 frames)
+        private const int PerfWindow = 240;
+        private readonly float[] perfSamples = new float[PerfWindow];
+        private int perfIndex = 0;
+        private int perfCount = 0;
+        private float perfMinMs = float.MaxValue;
+        private float perfMaxMs = 0f;
+        private float perfSumMs = 0f;
+
+        private void AccumulatePerf(float frameMs)
+        {
+            // Remove old sample from sum when buffer full
+            if (perfCount == PerfWindow)
+            {
+                float old = perfSamples[perfIndex];
+                perfSumMs -= old;
+                // If old was min or max we'll recompute lazily below
+                if (old == perfMinMs || old == perfMaxMs)
+                {
+                    // Recompute min/max across buffer
+                    float nMin = float.MaxValue, nMax = 0f;
+                    for (int i = 0; i < perfCount; i++)
+                    {
+                        float v = perfSamples[i];
+                        if (v < nMin) nMin = v;
+                        if (v > nMax) nMax = v;
+                    }
+                    perfMinMs = nMin;
+                    perfMaxMs = nMax;
+                }
+            }
+            else
+            {
+                perfCount++;
+            }
+            perfSamples[perfIndex] = frameMs;
+            perfIndex = (perfIndex + 1) % PerfWindow;
+            perfSumMs += frameMs;
+            if (frameMs < perfMinMs) perfMinMs = frameMs;
+            if (frameMs > perfMaxMs) perfMaxMs = frameMs;
+        }
+
+        private float PerfAvgMs => perfCount > 0 ? perfSumMs / perfCount : 0f;
+
+        private void ResetPerf()
+        {
+            for (int i = 0; i < perfSamples.Length; i++) perfSamples[i] = 0f;
+            perfIndex = 0; perfCount = 0; perfMinMs = float.MaxValue; perfMaxMs = 0f; perfSumMs = 0f;
+        }
+
+        // Simple local UI button (lightweight to avoid deeper Gui layout mixing here)
+        private bool DrawSimpleButton(Surface surface, string text, int x, int y, int mouseX, int mouseY, bool mouseDown, out int w)
+        {
+            w = text.Length * 7 + 24; int h = 20;
+            bool hover = mouseX >= x && mouseX < x + w && mouseY >= y && mouseY < y + h;
+            bool pressEdge = hover && mouseDown;
+            var bg = hover ? Colors.Blue : new Asmo.Types.Color(20, 20, 40, 200);
+            // fill
+            for (int py = 0; py < h; py++)
+                for (int px = 0; px < w; px++)
+                    surface.SetPixel(x + px, y + py, bg);
+            surface.DrawOutlinedRect(x, y, w, h, Colors.Cyan);
+            surface.DrawText(x + (w - text.Length * 7) / 2, y + 4, text, Colors.White);
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
+            return pressEdge;
+        }
+
 
         // Audio fields for boot chime
         private static bool bootChimePlayed = false;
@@ -47,16 +114,15 @@ namespace Asmo.Window.HomeScreen
 
         public HomeScreenDisplay()
         {
+            // TODO: remember to change this between true/false for debugging
             GameEnvironment.ShowFps = false;
 
             // Ensure DebugOverlay exists
-            if (Asmo.DebugOverlay.Current == null)
-                DebugOverlay.Current = new Asmo.DebugOverlay();
-                Console.WriteLine("[HomeScreen] Created DebugOverlay instance.");
-                Asmo.DebugOverlay.Current.Show();
-            
-            // Register custom framegraph
-            Asmo.DebugOverlay.Current.RegisterFrameGraph(homeScreenGraph);
+            if (Asmo.DebugOverlay.Current != null)
+            {
+                Asmo.DebugOverlay.Current.RegisterFrameGraph(homeScreenGraph);
+                // Asmo.DebugOverlay.Current?.Show();
+            }
             // Play boot chime only once per app run
             if (!bootChimePlayed)
             {
@@ -72,7 +138,7 @@ namespace Asmo.Window.HomeScreen
                 }
                 bootChimePlayed = true;
             }
-            Asmo.DebugOverlay.Current.Toggle();
+            // Do not toggle—visibility controlled centrally
         }
 
         public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
@@ -87,7 +153,7 @@ namespace Asmo.Window.HomeScreen
             {
                 // Respect externally set title (e.g., a game) – do not overwrite.
             }
-            else if (framebuffer.Window.GetWindowName() != Asmo.Window.Window.CanonicalTitle)
+            else if (framebuffer.Window != null && framebuffer.Window.GetWindowName() != Asmo.Window.Window.CanonicalTitle)
             {
                 System.Diagnostics.Debug.WriteLine($"[HomeScreen] Restoring canonical title '{Asmo.Window.Window.CanonicalTitle}' (was '{framebuffer.Window.GetWindowName()}')");
                 framebuffer.Window.SetWindowTitle(Asmo.Window.Window.CanonicalTitle);
@@ -102,6 +168,9 @@ namespace Asmo.Window.HomeScreen
             int mouseX = (int)mouse.X;
             int mouseY = (int)mouse.Y;
 
+            // Accumulate perf for Performance tab
+            AccumulatePerf(frameMs);
+
             // Cycle tips every 5 seconds
             tipTimer += e.Time;
             if (tipTimer > 5.0)
@@ -113,61 +182,142 @@ namespace Asmo.Window.HomeScreen
             // // Draw a border around the framebuffer for scaling debug
             // framebuffer.DrawOutlinedRect(0, 0, framebuffer.Width, framebuffer.Height, Colors.Red);
 
-            // Main Home Panel
-            int panelW = 340, panelH = 180;
+            // Main Panel with Tabs
+            int panelW = 480, panelH = 260;
             int panelX = (framebuffer.Width - panelW) / 2;
             int panelY = (framebuffer.Height - panelH) / 2;
             framebuffer.DrawOutlinedRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8, Colors.Cyan);
-            Asmo.DebugOverlay.Current.RegisterDrawCall();
-            // Gradient panel background
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
             framebuffer.DrawVerticalGradientRect(
                 panelX, panelY, panelW, panelH,
-                new Asmo.Types.Color(16, 16, 48, 220), // top color
-                new Asmo.Types.Color(32, 32, 64, 220)  // bottom color
+                new Asmo.Types.Color(16, 16, 48, 220),
+                new Asmo.Types.Color(32, 32, 64, 220)
             );
-            Asmo.DebugOverlay.Current.RegisterDrawCall();
-            // Asmo.DebugOverlay.Current.DrawFpsGraph(framebuffer, 8, framebuffer.Height - 40 - 8, 120, 40);
-            // Asmo.DebugOverlay.Current.DrawFrameTimeGraph(framebuffer, 8, framebuffer.Height - 80 - 16, 120, 40);
+            Asmo.DebugOverlay.Current?.RegisterDrawCall();
 
-            int y = panelY + 18;
-            framebuffer.DrawText(panelX + 20, y, $"ASMO GAME CONSOLE", Colors.Yellow); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 20;
-            framebuffer.DrawText(panelX + 20, y, $"Drop a game file (DLL or ZIP) to play!", Colors.White); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 18;
-            framebuffer.DrawText(panelX + 20, y, $"(Or drag a folder with a game DLL)", Colors.Gray); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 18;
-            framebuffer.DrawText(panelX + 20, y, $"Version: {version}", Colors.Cyan); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"{github}", Colors.Blue); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"GPU Drivers: {GL.GetString(StringName.Version)}", Colors.Blue); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"GPU Name: {GL.GetString(StringName.Vendor)}", Colors.Green); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
+            // GUI begin inside panel
+            bool mouseDown = mouse != null && framebuffer.Window != null && framebuffer.Window.IsMouseButtonDown(OpenTK.Windowing.GraphicsLibraryFramework.MouseButton.Left);
+            Asmo.Gui.Gui.Begin(panelX + 16, panelY + 16);
 
-            // --- Framebuffer Resize Test Button ---
-            int buttonX = panelX + 20;
-            int buttonY = y + 8;
-            Asmo.Gui.Gui.Begin(buttonX, buttonY);
-            bool mouseDown = mouse != null && framebuffer.Window.IsMouseButtonDown(OpenTK.Windowing.GraphicsLibraryFramework.MouseButton.Left);
-            // if (Asmo.Gui.Gui.Button(framebuffer, "Toggle Debug Overlay", Colors.Magenta, mouseX, mouseY, mouseDown))
-            // {
-            //     Asmo.DebugOverlay.Current?.Toggle();
-            // }
+            // Tabs across top
+            string[] tabs = new [] { "Home", "System", "Performance", "About" };
+            int selected = Asmo.Gui.Gui.Tabs(framebuffer, "home_screen_tabs", tabs, mouseX, mouseY, mouseDown);
 
-            y += 32;
-
-            // Tips area (bottom of panel)
-            int tipY = panelY + panelH - 24;
-            framebuffer.DrawText(panelX + 20, tipY, tips[tipIndex], Colors.Green); Asmo.DebugOverlay.Current?.RegisterDrawCall();
-            if (GameEnvironment.ShowFps)
+            // Content area origin after tabs
+            switch (selected)
             {
-                framebuffer.DrawText(fpsTextX, fpsTextY, fpsText, Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
-                // Removed manual frame time and FPS graph drawing. DebugOverlay handles this now.
+                case 0: // Home
+                    framebuffer.DrawText(panelX + 24, Asmo.Gui.Gui.Theme.ItemSpacingY + panelY + 36 - 8, "ASMO GAME CONSOLE", Colors.Yellow); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 64, "Drop a game file (DLL or ZIP) to play!", Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 82, "(Or drag a folder with a game DLL)", Colors.Gray); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 104, $"Tip: {tips[tipIndex]}", Colors.Green); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    break;
+                case 1: // System
+                    framebuffer.DrawText(panelX + 24, panelY + 48, $"Version: {version}", Colors.Cyan); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 66, $"GPU Driver: {GL.GetString(StringName.Version)}", Colors.Blue); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 84, $"GPU Vendor: {GL.GetString(StringName.Vendor)}", Colors.Green); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 102, $"Resolution: {framebuffer.Width}x{framebuffer.Height}", Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    break;
+                case 2: // Performance
+                    framebuffer.DrawText(panelX + 24, panelY + 48, $"Frame: {frameMs:F2} ms ({rawFps:F1} fps)", Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    // Potentially draw graphs inline later
+                    break;
+                case 3: // About
+                    framebuffer.DrawText(panelX + 24, panelY + 48, $"Author: {author}", Colors.Cyan); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 66, $"GitHub: {github}", Colors.Blue); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    framebuffer.DrawText(panelX + 24, panelY + 84, description, Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                    break;
             }
+
+            // Performance tab content augmentation
+            if (selected == 2)
+            {
+                // Inline graphs (reuse DebugOverlay drawing helpers if available)
+                int graphX = panelX + 24;
+                int graphY = panelY + 72;
+                int graphW = 180;
+                int graphH = 60;
+                Asmo.DebugOverlay.Current?.DrawFrameTimeGraph(framebuffer, graphX, graphY, graphW, graphH);
+                Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                Asmo.DebugOverlay.Current?.DrawFpsGraph(framebuffer, graphX, graphY + graphH + 8, graphW, graphH);
+                Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                // Stats summary
+                framebuffer.DrawText(panelX + 220, panelY + 48, $"Min: {perfMinMs:F2} ms", Colors.Green); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                framebuffer.DrawText(panelX + 220, panelY + 64, $"Avg: {PerfAvgMs:F2} ms", Colors.Cyan); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                framebuffer.DrawText(panelX + 220, panelY + 80, $"Max: {perfMaxMs:F2} ms", Colors.Red); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                // Action buttons
+                int actY = panelY + 152;
+                int actX = panelX + 24;
+                int bw;
+                if (DrawSimpleButton(framebuffer, "Clear Stats", actX, actY, mouseX, mouseY, mouseDown, out bw))
+                    ResetPerf();
+                actX += bw + 12;
+                if (DrawSimpleButton(framebuffer, "Toggle Overlay", actX, actY, mouseX, mouseY, mouseDown, out bw))
+                    Asmo.DebugOverlay.Current?.Toggle();
+                if (GameEnvironment.ShowFps)
+                {
+                    string badge = $"{rawFps:F0} FPS";
+                    int bx = panelX + panelW - (badge.Length * 7) - 24;
+                    int by = panelY + 20;
+                    framebuffer.DrawText(bx, by, badge, Colors.White);
+                    Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                }
+            }
+
+            // Enhanced Home tab features
+            if (selected == 0)
+            {
+                int actionsY = panelY + 140;
+                int actionsX = panelX + 24;
+                int bw;
+                if (DrawSimpleButton(framebuffer, "Toggle Overlay", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw))
+                {
+                    Asmo.DebugOverlay.Current?.Toggle();
+                }
+                actionsX += bw + 12;
+                if (DrawSimpleButton(framebuffer, "Settings", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw))
+                {
+                    showSettings = !showSettings; // placeholder
+                }
+                actionsX += bw + 12;
+                if (DrawSimpleButton(framebuffer, "Exit", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw))
+                {
+                    framebuffer.Window?.Close();
+                }
+                // Recent games list
+                var entries = Asmo.Window.GameHistory.Entries;
+                framebuffer.DrawText(panelX + 24, panelY + 168, "Recent Games:", Colors.Cyan); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                if (entries.Count == 0)
+                {
+                    framebuffer.DrawText(panelX + 24, panelY + 186, "(none yet)", Colors.Gray); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                }
+                else
+                {
+                    int ry = panelY + 186;
+                    int shown = 0;
+                    foreach (var g in entries)
+                    {
+                        if (shown >= 5) break; // show top 5
+                        string line = $"{g.DisplayName}  [{g.LastPlayed.ToLocalTime():HH:mm}]";
+                        framebuffer.DrawText(panelX + 24, ry, line, Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
+                        ry += 16; shown++;
+                    }
+                }
+            }
+
+            // End of GUI frame (layout resets next call)
+
+            // (Global FPS badge removed from non-performance tabs per request to move perf items)
             // Draw mouse cursor
             if (mouseX >= 0 && mouseY >= 0 && mouseX < framebuffer.Width && mouseY < framebuffer.Height)
             {
                 framebuffer.DrawOutlinedRect(mouseX - 4, mouseY - 4, 9, 9, Colors.Magenta);
-                Asmo.DebugOverlay.Current.RegisterDrawCall();
+                Asmo.DebugOverlay.Current?.RegisterDrawCall();
             }
             if (GameEnvironment.ShowFps)
             {
-                Asmo.DebugOverlay.Current.Render(framebuffer);
-                Asmo.DebugOverlay.Current.Show();
+                Asmo.DebugOverlay.Current?.Render(framebuffer);
+                // Asmo.DebugOverlay.Current?.Show();
             }
         }
     }

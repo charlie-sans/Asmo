@@ -554,5 +554,76 @@ namespace Asmo.Gui
         {
             if (clipStack.Count > 0) clipStack.Pop();
         }
+
+        // ------------------------- Tabs Control -------------------------
+        private class TabsState { public int SelectedIndex; }
+        private static readonly System.Collections.Generic.Dictionary<string, TabsState> tabsStates = new();
+
+        // Draws a horizontal tab bar. Returns currently selected tab index.
+        // labels: list of tab names. id: stable identifier for persistent selection.
+        public static int Tabs(Surface surface, string id, string[] labels, int mouseX, int mouseY, bool mouseDown)
+        {
+            if (labels == null || labels.Length == 0) return -1;
+            if (!tabsStates.TryGetValue(id, out var state))
+                tabsStates[id] = state = new TabsState { SelectedIndex = 0 };
+
+            int idx = NextWidgetIndex(); // treat entire tabs bar as one navigable widget
+            lastItemStartY = cursorY;
+            bool focused = IsFocused(idx);
+
+            // Keyboard navigation (Left/Right when focused)
+            if (focused)
+            {
+                if (keyLeftEdge) state.SelectedIndex = (state.SelectedIndex - 1 + labels.Length) % labels.Length;
+                if (keyRightEdge) state.SelectedIndex = (state.SelectedIndex + 1) % labels.Length;
+            }
+
+            int xCursor = cursorX;
+            int tabHeight = 22;
+            int spacing = 4;
+            int totalWidth = 0;
+            for (int i = 0; i < labels.Length; i++)
+            {
+                string t = labels[i];
+                int textW = t.Length * 7;
+                int tabW = textW + 20; // padding
+                int tabX = xCursor;
+                int tabY = cursorY;
+                bool hovered = mouseX >= tabX && mouseX < tabX + tabW && mouseY >= tabY && mouseY < tabY + tabHeight;
+                bool mousePressed = mouseDown && !prevMouseDown;
+                if (hovered && mousePressed)
+                {
+                    state.SelectedIndex = i;
+                    RequestFocus(idx);
+                }
+                bool selected = (i == state.SelectedIndex);
+                // Colors
+                Color bg = selected ? theme.ButtonActive : hovered ? theme.ButtonHovered : theme.Button;
+                Color border = selected ? theme.BorderFocus : theme.Border;
+                // Fill tab rectangle
+                for (int py = 0; py < tabHeight; py++)
+                    for (int px = 0; px < tabW; px++)
+                        surface.SetPixel(tabX + px, tabY + py, bg);
+                surface.DrawOutlinedRect(tabX, tabY, tabW, tabHeight, border);
+                surface.DrawText(tabX + (tabW - textW) / 2, tabY + 5, t, theme.Text);
+                // Active underline accent
+                if (selected)
+                {
+                    for (int ux = 1; ux < tabW - 1; ux++)
+                        surface.SetPixel(tabX + ux, tabY + tabHeight - 2, theme.Highlight);
+                }
+                xCursor += tabW + spacing;
+                totalWidth += tabW + spacing;
+            }
+            if (totalWidth > 0) totalWidth -= spacing;
+            lastItemWidth = totalWidth; lastItemHeight = tabHeight;
+            // Advance layout to next line below tabs
+            cursorY += tabHeight + 6;
+            cursorX = baseX + indentLevel * IndentSize;
+            return state.SelectedIndex;
+        }
+
+        public static int Tabs(Surface surface, string id, string[] labels)
+            => Tabs(surface, id, labels, currentMouseX, currentMouseY, currentMouseDown);
     }
 }

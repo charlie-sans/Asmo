@@ -11,7 +11,7 @@ namespace Asmo
 {
     public class DebugOverlay
     {
-        public static DebugOverlay Current { get; set; }
+    public static DebugOverlay? Current { get; private set; }
         private bool _visible = false;
         private Stopwatch _frameTimer = new Stopwatch();
         private Queue<double> _frameTimes = new Queue<double>();
@@ -84,8 +84,10 @@ namespace Asmo
 
         public void DrawFrameTimeGraph(Asmo.Gfx.Surface surface, int x, int y, int width, int height) {
             if (_frameTimes.Count == 0) return;
-            double maxMs = Math.Max(33.3, GetMaxFrameTime());
             var arr = _frameTimes.ToArray();
+            double maxObserved = arr.Max();
+            // Allow dynamic scaling if all frames are well below 16.7ms ( >60fps ), but keep a minimum for readability
+            double maxMs = maxObserved < 16.7 ? Math.Max(maxObserved * 1.25, 5.0) : Math.Max(33.3, maxObserved);
             int n = Math.Min(width, arr.Length);
             for (int i = 0; i < n; i++) {
                 int idx = (arr.Length + _frameTimes.Count - n + i) % arr.Length;
@@ -93,19 +95,22 @@ namespace Asmo
                 int barH = (int)Math.Min((ms / maxMs) * (height - 4), height - 4);
                 int barY = y + (height - 4 - barH) + 2;
                 int barX = x + i;
-                var color = ms < 16.7 ? Asmo.Gfx.Colors.Green : (ms < 25 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red);
+                var color = ms < 8.0 ? Asmo.Gfx.Colors.Cyan : (ms < 16.7 ? Asmo.Gfx.Colors.Green : (ms < 25 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red));
                 surface.DrawRect(barX, barY, 1, barH, color);
             }
             surface.DrawRect(x, y + height - 2, width, 1, Asmo.Gfx.Colors.Gray);
-            surface.DrawText(x + 4, y + 4, $"Frame ms", Asmo.Gfx.Colors.White);
-            surface.DrawText(x + 4, y + 16, $"16.7ms (60fps)", Asmo.Gfx.Colors.Green);
-            surface.DrawText(x + 4, y + 28, $"33.3ms (30fps)", Asmo.Gfx.Colors.Red);
+            surface.DrawText(x + 4, y + 4, $"Frame ms (max:{maxMs:F1})", Asmo.Gfx.Colors.White);
+            surface.DrawText(x + 4, y + 16, $"8.3ms (~120fps)", Asmo.Gfx.Colors.Cyan);
+            surface.DrawText(x + 4, y + 28, $"16.7ms (60fps)", Asmo.Gfx.Colors.Green);
         }
 
         public void DrawFpsGraph(Asmo.Gfx.Surface surface, int x, int y, int width, int height) {
             if (_frameTimes.Count == 0) return;
-            double maxFps = 120.0;
             var arr = _frameTimes.ToArray();
+            double maxFpsObserved = arr.Max(ms => ms > 0.01 ? 1000.0 / ms : 1000.0);
+            // Choose an upper bucket just above observed value
+            double[] buckets = { 30, 60, 90, 120, 144, 165, 180, 200, 240, 300, 360, 480 }; // extendable
+            double maxFps = buckets.First(b => b >= maxFpsObserved * 1.05);
             int n = Math.Min(width, arr.Length);
             for (int i = 0; i < n; i++) {
                 int idx = (arr.Length + _frameTimes.Count - n + i) % arr.Length;
@@ -114,13 +119,14 @@ namespace Asmo
                 int barH = (int)Math.Min((fps / maxFps) * (height - 4), height - 4);
                 int barY = y + (height - 4 - barH) + 2;
                 int barX = x + i;
-                var color = fps > 60 ? Asmo.Gfx.Colors.Green : (fps > 30 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red);
+                var color = fps >= 120 ? Asmo.Gfx.Colors.Cyan : (fps >= 60 ? Asmo.Gfx.Colors.Green : (fps >= 30 ? Asmo.Gfx.Colors.Yellow : Asmo.Gfx.Colors.Red));
                 surface.DrawRect(barX, barY, 1, barH, color);
             }
             surface.DrawRect(x, y + height - 2, width, 1, Asmo.Gfx.Colors.Gray);
-            surface.DrawText(x + 4, y + 4, $"FPS", Asmo.Gfx.Colors.White);
-            surface.DrawText(x + 4, y + 16, $"60 FPS", Asmo.Gfx.Colors.Green);
-            surface.DrawText(x + 4, y + 28, $"30 FPS", Asmo.Gfx.Colors.Red);
+            surface.DrawText(x + 4, y + 4, $"FPS (≤{maxFps:F0})", Asmo.Gfx.Colors.White);
+            surface.DrawText(x + 4, y + 16, $"60", Asmo.Gfx.Colors.Green);
+            if (maxFps >= 120) surface.DrawText(x + 40, y + 16, $"120", Asmo.Gfx.Colors.Cyan);
+            surface.DrawText(x + 4, y + 28, $"30", Asmo.Gfx.Colors.Yellow);
         }
 
         // --- Custom FrameGraph support ---
@@ -135,6 +141,13 @@ namespace Asmo
         public void UnregisterFrameGraph(Asmo.Debug.FrameGraph graph) => _customGraphs.Remove(graph);
 
         private int _renderCount = 0;
+        private long _lastTouchedPixels = 0;
+        private long _lastTotalPixels = 0;
+        public void UpdatePixelStats(long touched, long total)
+        {
+            _lastTouchedPixels = touched;
+            _lastTotalPixels = total;
+        }
         public void Render(Asmo.Gfx.Surface surface)
         {
             // Console.WriteLine($"[DebugOverlay] Render called. Visible={_visible}");
@@ -145,6 +158,11 @@ namespace Asmo
             _sb.AppendLine($"Draw Calls: {_drawCallCount}");
             _sb.AppendLine($"Memory: {_lastMemory / 1024 / 1024} MB");
             _sb.AppendLine($"Overlay Render Count: {_renderCount}");
+            if (_lastTotalPixels > 0)
+            {
+                double pct = (_lastTouchedPixels / (double)_lastTotalPixels) * 100.0;
+                _sb.AppendLine($"Dirty Pixels: {_lastTouchedPixels}/{_lastTotalPixels} ({pct:F1}%)");
+            }
             // Input state panel
             if (_keyboard != null)
             {
