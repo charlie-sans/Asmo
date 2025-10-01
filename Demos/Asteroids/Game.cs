@@ -72,51 +72,63 @@ namespace Asteroids
         public void Update(double deltaTime)
         {
             audio?.Update(deltaTime);
+            const double targetFrame = 1.0 / 60.0;
+            double dt = deltaTime / targetFrame; // dt = 1 at 60fps, <1 if faster, >1 if slower
+
             if (restartRequested)
             {
                 restartRequested = false;
                 Init(new Surface(lastSurfaceWidth, lastSurfaceHeight));
                 return;
             }
-                if (kb == null)
-                    return;
-                if (gameOver)
-                {
-                    if (kb.IsKeyPressed(Keys.Enter))
-                    {
-                        restartRequested = true;
-                    }
-                    return;
-                }
-            if (respawnTimer > 0)
+            if (kb == null)
+                return;
+            if (gameOver)
             {
-                respawnTimer--;
+                if (kb.IsKeyPressed(Keys.Enter))
+                {
+                    restartRequested = true;
+                }
                 return;
             }
+            if (respawnTimer > 0)
+            {
+                respawnTimer -= (int)Math.Ceiling(dt);
+                if (respawnTimer > 0) return;
+                respawnTimer = 0;
+            }
             if (invincibilityTimer > 0)
-                invincibilityTimer--;
+            {
+                invincibilityTimer -= (int)Math.Ceiling(dt);
+                if (invincibilityTimer < 0) invincibilityTimer = 0;
+            }
             // Ship controls
-            if (kb.IsKeyDown(Keys.Left)) shipAngle -= 0.08f;
-            if (kb.IsKeyDown(Keys.Right)) shipAngle += 0.08f;
+            float rotSpeed = 0.08f * (float)dt;
+            if (kb.IsKeyDown(Keys.Left)) shipAngle -= rotSpeed;
+            if (kb.IsKeyDown(Keys.Right)) shipAngle += rotSpeed;
             thrusting = kb.IsKeyDown(Keys.Up);
             if (thrusting)
             {
-                shipVX += (float)Math.Cos(shipAngle) * 0.15f;
-                shipVY += (float)Math.Sin(shipAngle) * 0.15f;
+                float thrust = 0.15f * (float)dt;
+                shipVX += (float)Math.Cos(shipAngle) * thrust;
+                shipVY += (float)Math.Sin(shipAngle) * thrust;
             }
             // Fire (with cooldown)
-            if (fireCooldown > 0) fireCooldown--;
+            if (fireCooldown > 0) fireCooldown -= (int)Math.Ceiling(dt);
+            if (fireCooldown < 0) fireCooldown = 0;
             if (kb.IsKeyDown(Keys.Space) && fireCooldown == 0)
             {
                 bullets.Add(new Bullet(shipX, shipY, shipAngle));
-                fireCooldown = 10; // frames between shots
+                fireCooldown = 10; // frames between shots (now in 60fps units)
                 if (audio is not null && shootClip is not null)
                     audio.PlayClip(shootClip);
             }
             // Move ship
-            shipX += shipVX;
-            shipY += shipVY;
-            shipVX *= 0.99f; shipVY *= 0.99f;
+            shipX += shipVX * (float)dt;
+            shipY += shipVY * (float)dt;
+            float drag = (float)Math.Pow(0.99f, dt); // frame-rate independent drag
+            shipVX *= drag;
+            shipVY *= drag;
             Wrap(ref shipX, 0, lastSurfaceWidth);
             Wrap(ref shipY, 0, lastSurfaceHeight);
             // Move asteroids
@@ -124,7 +136,7 @@ namespace Asteroids
             // Move bullets
             for (int i = bullets.Count - 1; i >= 0; i--)
             {
-                bullets[i].Update();
+                bullets[i].Update((float)dt);
                 if (bullets[i].Life <= 0) bullets.RemoveAt(i);
             }
             // Bullet-asteroid collision
@@ -322,9 +334,9 @@ namespace Asteroids
             VX = (float)Math.Cos(angle) * 6f;
             VY = (float)Math.Sin(angle) * 6f;
         }
-        public void Update()
+        public void Update(float dt = 1f)
         {
-            X += VX; Y += VY; Life--;
+            X += VX * dt; Y += VY * dt; Life -= (int)Math.Ceiling(dt);
         }
         public void Draw(Surface s)
         {
