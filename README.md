@@ -5,38 +5,30 @@ Welcome to **Asmo**! This is a fun, modern C#/.NET framework for making retro-st
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (Summary)
+Full guide: see `docs/quickstart.md`.
 
-1. **Requirements:**
-   - .NET 9 SDK or newer
-   - Windows (Linux/Mac might work with tweaks)
-
-2. **Build & Run:**
-   ```sh
+1. Install .NET 9 SDK
+2. Clone & build:
+   ```powershell
    git clone https://github.com/charlie-sans/Asmo.git
    cd Asmo
-   dotnet run
+   dotnet run --project .\AsmoRuntime
    ```
-   Or open the solution in Visual Studio and run AstroTestGame.
-
-2.5. **Drag and drop:**
-   drag and drop the net9.0 folder from the AstroTestGame/bin/Debug/net9.0 folder on the asmo window and the game will start
-
-3. **Play!**
-   - Arrow keys to move
-   - Collect power-ups
-   - Hit the DVD logo for fun
+3. Drag & drop a demo game's `bin/Debug/net9.0` folder onto the window to launch it.
+4. Open `docs/quickstart.md` to build your own minimal game.
 
 ---
 
-## 🎮 Features
+## 🎮 Features (Current Slice)
 
-- Easy 2D pixel graphics (draw text, shapes, sprites, etc.)
-- Chiptune & sound effect playback
-- Keyboard input
-- Simple asset management
-- Minimal, immediate-mode GUI (see `Gui/Gui.cs`)
-- Example game included
+- 2D pixel framebuffer + text & sprite rendering
+- Basic audio playback (mixer overhaul planned)
+- Keyboard input (gamepad module planned)
+- Simple asset loading helpers
+- Immediate-mode GUI (`Gui/Gui.cs`)
+- Sample demos (`Demos/`)
+- Early scene system (see `Plans/scene-management-system.md`)
 
 ---
 
@@ -52,19 +44,19 @@ if (Gui.Button(surface, "Click Me", Colors.Yellow, mouseX, mouseY, mouseDown)) {
 
 ---
 
-## ⚙️ Customization
-
-You can tweak the game environment in code:
-
-- `GameEnvironment.AssetRoot` — Where your assets live
-- `GameEnvironment.WindowTitle` — Window title
-- `GameEnvironment.ShowFps` — Show FPS counter
+## ⚙️ Configuration Hints
+- `GameEnvironment.AssetRoot` – asset lookup base
+- `GameEnvironment.WindowTitle` – initial window title (avoid per-frame changes)
+- `GameEnvironment.ShowFps` – overlay FPS counter
 
 ---
 
 ## 🤝 Contributing
-
-Pull requests and issues are welcome! Please keep code style tidy and add examples for new features.
+See roadmap: `Plans/2025-10-roadmap.md` for active epics.
+Guidelines (draft):
+- Prefer small, focused PRs
+- Include a demo or test where feasible
+- Document new public APIs briefly in `docs/` (or create a stub)
 
 ---
 

@@ -19,11 +19,11 @@ Introduce a lightweight scene stack that handles switching between menus, gamepl
 - Networked scene synchronization.
 - Editor tooling for scene graphs.
 
-## Milestones
-- [x] Draft scene API contract and integration points with `GameEnvironment`.
-- [x] Build prototype manager with at least two sample scenes (menu + gameplay).
-- [x] Implement transition helpers and ensure they play nicely with the render pipeline.
-- [ ] Document usage and migrate existing sample game to the new system.
+## Milestones (Consolidated into `2025-10-roadmap.md`)
+- ✅ Draft scene API contract and integration points with `GameEnvironment`.
+- ✅ Build prototype manager with at least two sample scenes (menu + gameplay).
+- ✅ Implement transition helpers and ensure they play nicely with the render pipeline.
+- 🔄 Document usage and migrate existing sample game to the new system.
 
 ## Dependencies
 - Current game loop entry points (`Program.cs`, `GameEnvironment`).
@@ -34,7 +34,7 @@ Introduce a lightweight scene stack that handles switching between menus, gamepl
 - Transition effects complete within expected frame budget (<16ms on target hardware).
 - No resource leaks when rapidly switching scenes (verify via debug overlay once available).
 
-## Open Questions
+## Open Questions (Deferred / To Revisit Post Roadmap Phase 1)
 - Should scenes manage their own asset lifetimes or rely on global asset cache?
 - Is a coroutine-style async helper needed for scene transitions?
 - Do we want to expose a scripting hook (e.g., Lua) for defining scene flows later?

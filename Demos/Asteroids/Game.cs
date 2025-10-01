@@ -59,10 +59,10 @@ namespace Asteroids
             // Audio setup
             if (audio == null)
             {
-                audio = new Asmo.Audio.AudioEngine();
-                shootClip = Asmo.Audio.AudioClip.CreateSquare(900, 0.08, 0.2f);
-                explodeClip = Asmo.Audio.AudioClip.CreateNoise(0.18, 0.2f, 0, 0);
-                hitClip = Asmo.Audio.AudioClip.CreateSine(120, 0.25, 0.2f, 0);
+                // audio = new Asmo.Audio.AudioEngine();
+                // shootClip = Asmo.Audio.AudioClip.CreateSquare(900, 0.08, 0.2f);
+                // explodeClip = Asmo.Audio.AudioClip.CreateNoise(0.18, 0.2f, 0, 0);
+                // hitClip = Asmo.Audio.AudioClip.CreateSine(120, 0.25, 0.2f, 0);
             }
             // Spawn some asteroids
             for (int i = 0; i < 5; i++)

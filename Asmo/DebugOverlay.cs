@@ -11,7 +11,7 @@ namespace Asmo
 {
     public class DebugOverlay
     {
-        public static DebugOverlay? Current { get; private set; }
+        public static DebugOverlay Current { get; set; }
         private bool _visible = false;
         private Stopwatch _frameTimer = new Stopwatch();
         private Queue<double> _frameTimes = new Queue<double>();
@@ -34,7 +34,7 @@ namespace Asmo
         }
 
         public void Toggle() => _visible = !_visible;
-    public void Show() => _visible = true;
+        public void Show() => _visible = true;
         public bool IsVisible => _visible;
 
         public void BeginFrame()
@@ -123,19 +123,36 @@ namespace Asmo
             surface.DrawText(x + 4, y + 28, $"30 FPS", Asmo.Gfx.Colors.Red);
         }
 
+        // --- Custom FrameGraph support ---
+        private readonly List<Asmo.Debug.FrameGraph> _customGraphs = new();
+        /// <summary>
+        /// Register a custom FrameGraph to be rendered in the overlay.
+        /// </summary>
+        public void RegisterFrameGraph(Asmo.Debug.FrameGraph graph) => _customGraphs.Add(graph);
+        /// <summary>
+        /// Remove a custom FrameGraph from the overlay.
+        /// </summary>
+        public void UnregisterFrameGraph(Asmo.Debug.FrameGraph graph) => _customGraphs.Remove(graph);
+
+        private int _renderCount = 0;
         public void Render(Asmo.Gfx.Surface surface)
         {
+            // Console.WriteLine($"[DebugOverlay] Render called. Visible={_visible}");
             if (!_visible) return;
+            _renderCount++;
             _sb.Clear();
             _sb.AppendLine($"FPS: {_lastFps:F1} (1% low: {_last1PercentLow:F1})");
             _sb.AppendLine($"Draw Calls: {_drawCallCount}");
             _sb.AppendLine($"Memory: {_lastMemory / 1024 / 1024} MB");
+            _sb.AppendLine($"Overlay Render Count: {_renderCount}");
             // Input state panel
             if (_keyboard != null)
             {
                 // _sb.AppendLine("Keys: " + string.Join(", ", _keyboard.GetPressedKeys()));
             }
             surface.DrawText(8, 8, _sb.ToString(), Asmo.Gfx.Colors.White);
+            // Draw a visible watermark in the corner
+            surface.DrawText(surface.Width - 180, 8, "DEBUG OVERLAY ACTIVE", Asmo.Gfx.Colors.Magenta);
             // Draw frame time and FPS graphs below the text
             int graphX = 8;
             int graphY = 64;
@@ -143,6 +160,15 @@ namespace Asmo
             int graphHeight = 40;
             DrawFrameTimeGraph(surface, graphX, graphY, graphWidth, graphHeight);
             DrawFpsGraph(surface, graphX, graphY + graphHeight + 8, graphWidth, graphHeight);
+
+            // Draw custom user graphs (stacked vertically)
+            int customY = graphY + 2 * (graphHeight + 8) + 8;
+            foreach (var graph in _customGraphs)
+            {
+                graph.Draw(surface, graphX, customY, graphWidth, graphHeight);
+                customY += graphHeight + 8;
+            }
+            // Console.WriteLine($"[DebugOverlay] Rendered overlay frame {_renderCount}");
         }
     }
 }

@@ -1,21 +1,28 @@
 ﻿
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
+using OpenTK.Windowing.GraphicsLibraryFramework;
+using System.Runtime.InteropServices;
+using System.Text;
 using Asmo.Types;
 using Asmo.Gfx;
 using System.ComponentModel;
 using System.IO.Compression;
 using Asmo;
 using Asmo.Window.HomeScreen;
+using System.Diagnostics;
 
 namespace Asmo.Window
 {
     public class Window : GameWindow
     {
+        // Central canonical window title (update here if you want to rename globally)
+        public const string CanonicalTitle = "ASMO Game Console";
         private bool gameLoaded = false;
         private int _texture;
         private int _shaderProgram;
@@ -23,9 +30,11 @@ namespace Asmo.Window
     private int _width = GameEnvironment.ScreenWidth, _height = GameEnvironment.ScreenHeight;
     public Surface framebuffer;
     // Persistent buffer for texture uploads
-    private byte[] _uploadBuffer;
-    // Optional: PBO for async texture uploads (advanced)
-    private int _pbo = 0;
+    // Pixel buffer backend abstraction (starts with CPU copy backend)
+    private IPixelBufferBackend _pixelBackend = null!; // initialized in OnLoad
+    // Optional legacy fields retained until GPU backend implemented
+    private byte[] _uploadBuffer = Array.Empty<byte>(); // transitional (will be removed once Surface rewired)
+    private int _pbo = 0; // reserved for persistent mapped path later
     // Hybrid renderer support
 
     public enum RendererType { Software, Hardware }
@@ -33,6 +42,14 @@ namespace Asmo.Window
     private ConsoleHost consoleHost;
     private HomeScreenDisplay display = new HomeScreenDisplay();
     private Asmo.Window.input.Mouse mouse;
+    private double _titleRefreshTimer = 0;
+    private double _nativePollTimer = 0;
+    private string _sentinel = string.Empty;
+    private string _baseTitle = CanonicalTitle; // mutable base part (game can change)
+    private string _expectedFullTitle = CanonicalTitle; // base + sentinel
+    private int _titleCorruptionIncidents = 0;
+    private bool _internalTitleUpdate = false; // guard flag for internal Title sets
+    private static bool _suppressTitleSets = true; // experiment: do not set title after creation
 
         /// <summary>
         /// Gets the width of the frame buffer in pixels.
@@ -43,13 +60,24 @@ namespace Asmo.Window
         /// </summary>
         public int FrameBufferY => _height;
 
-        public Window(GameWindowSettings settings) : base(gameWindowSettings: settings, NativeWindowSettings.Default)
+        private static readonly string _titleLogPath = Path.Combine(Path.GetTempPath(), "asmo_title_log.txt");
+
+        public Window(GameWindowSettings settings) : base(
+            gameWindowSettings: settings,
+            nativeWindowSettings: new NativeWindowSettings
+            {
+                // Title = CanonicalTitle,
+                ClientSize = new Vector2i(GameEnvironment.ScreenWidth * 1, GameEnvironment.ScreenHeight * 1)
+            })
         {
-            framebuffer = new Surface(_width, _height);
-            framebuffer.Window = this;
+            GameEnvironment.WindowTitle = CanonicalTitle;
+            framebuffer = new Surface(_width, _height) { Window = this };
             consoleHost = new ConsoleHost();
             mouse = new Asmo.Window.input.Mouse(this);
+                Title = CanonicalTitle;
         }
+    // Removed title log path (instrumentation disabled)
+    // private static readonly string _titleLogPath = Path.Combine(Path.GetTempPath(), "asmo_title_log.txt");
 
         /// <summary>
         /// Resize the framebuffer and all related resources at runtime.
@@ -61,14 +89,10 @@ namespace Asmo.Window
             _height = height;
             framebuffer = new Surface(_width, _height);
             framebuffer.Window = this;
-            // Update OpenGL texture
-            GL.BindTexture(TextureTarget.Texture2D, _texture);
-            GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, _width, _height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
-            // Update upload buffer and PBO
+            // Resize backend (handles texture reallocation internally if GPU path; for CPU we handle here)
+            _pixelBackend.Resize(_width, _height);
+            // Transitional legacy buffers (still used by Render path until refactor complete)
             _uploadBuffer = new byte[_width * _height * 4];
-            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
-            GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
-            GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
             // Optionally update window size or viewport
             int scale = 2;
             Size = new Vector2i(_width * scale, _height * scale);
@@ -135,8 +159,7 @@ namespace Asmo.Window
             _shaderProgram = CreateShaderProgram(Shaders.DefaultVertexShaderSource, Shaders.DefaultFragmentShaderSource);
 
             // Initialize framebuffer and console host
-            framebuffer = new Surface(_width, _height);
-            framebuffer.Window = this;
+            framebuffer = new Surface(_width, _height) { Window = this };
             consoleHost = new ConsoleHost();
             // Allocate persistent upload buffer
             _uploadBuffer = new byte[_width * _height * 4];
@@ -145,15 +168,37 @@ namespace Asmo.Window
             GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
             GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
             GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
-            // Set the window title
-            Title = "Asmo Game Console";
+            // Try to use persistent mapped GPU backend; fallback to CPU if not supported
+            try
+            {
+                // Check for GL_ARB_buffer_storage or OpenGL >= 4.4
+                string versionStr = GL.GetString(StringName.Version) ?? "";
+                string extensions = GL.GetString(StringName.Extensions) ?? "";
+                bool hasBufferStorage = extensions.Contains("GL_ARB_buffer_storage") || versionStr.StartsWith("4.4") || versionStr.StartsWith("4.5") || versionStr.StartsWith("4.6") || versionStr.StartsWith("4.7") || versionStr.StartsWith("4.8") || versionStr.StartsWith("4.9") || versionStr.StartsWith("5.");
+                if (hasBufferStorage)
+                {
+                    _pixelBackend = new GpuPixelBuffer(_width, _height, _texture);
+                    System.Diagnostics.Debug.WriteLine("[PixelBuffer] Using persistent mapped GPU backend.");
+                }
+                else
+                {
+                    _pixelBackend = new CpuCopyPixelBuffer(_width, _height, _texture);
+                    System.Diagnostics.Debug.WriteLine("[PixelBuffer] Using legacy CPU copy backend (no buffer_storage support).");
+                }
+            }
+            catch (Exception ex)
+            {
+                _pixelBackend = new CpuCopyPixelBuffer(_width, _height, _texture);
+                System.Diagnostics.Debug.WriteLine($"[PixelBuffer] GPU backend unavailable, falling back to CPU: {ex.Message}");
+            }
+           
             // Set the window size to a multiple of framebuffer (e.g., 2x)
             int scale = 2;
             Size = new Vector2i(_width * scale, _height * scale);
             // Set initial viewport (will be updated in OnResize)
             UpdateViewport();
 
-        }
+    }
 
         public void Render(Surface surface, int x, int y)
         {
@@ -169,11 +214,8 @@ namespace Asmo.Window
                 _height = Math.Max(_height, y + ph);
                 GL.BindTexture(TextureTarget.Texture2D, _texture);
                 GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba, _width, _height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
-                // Resize upload buffer and PBO
-                _uploadBuffer = new byte[_width * _height * 4];
-                GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
-                GL.BufferData(BufferTarget.PixelUnpackBuffer, _width * _height * 4, IntPtr.Zero, BufferUsageHint.StreamDraw);
-                GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
+                _pixelBackend.Resize(_width, _height);
+                _uploadBuffer = new byte[_width * _height * 4]; // transitional
             }
 
             // Use dirty rectangle to minimize updates
@@ -182,33 +224,31 @@ namespace Asmo.Window
                 var (dirtyX, dirtyY, dirtyW, dirtyH) = surface.GetDirtyRect();
                 if (dirtyW > 0 && dirtyH > 0)
                 {
-                    // Use persistent buffer for dirty region
-                    int stride = dirtyW * 4;
-                    for (int py = 0; py < dirtyH; py++)
+                    if (_pixelBackend is GpuPixelBuffer gpu)
                     {
-                        int srcY = dirtyY + py;
-                        int flippedY = ph - 1 - srcY;
-                        if (flippedY < 0 || flippedY >= ph) continue;
-                        for (int px = 0; px < dirtyW; px++)
+                        // Write Color[][] directly into mapped GPU buffer as RGBA8
+                        var span = gpu.GetSpan();
+                        int width = surface.Width, height = surface.Height;
+                        for (int py = 0; py < height; py++)
                         {
-                            int srcX = dirtyX + px;
-                            if (srcX < 0 || srcX >= pw) continue;
-                            int i = (py * dirtyW + px) * 4;
-                            var c = pixels[srcX][flippedY];
-                            _uploadBuffer[i + 0] = (byte)c.R;
-                            _uploadBuffer[i + 1] = (byte)c.G;
-                            _uploadBuffer[i + 2] = (byte)c.B;
-                            _uploadBuffer[i + 3] = (byte)c.A;
+                            int flippedY = height - 1 - py; // vertical flip for GL
+                            for (int px = 0; px < width; px++)
+                            {
+                                var c = pixels[px][flippedY];
+                                int i = (py * width + px) * 4;
+                                span[i + 0] = (byte)c.R;
+                                span[i + 1] = (byte)c.G;
+                                span[i + 2] = (byte)c.B;
+                                span[i + 3] = (byte)c.A;
+                            }
                         }
+                        gpu.CommitDirty(0, 0, width, height); // full frame for now
                     }
-                    GL.BindTexture(TextureTarget.Texture2D, _texture);
-                    // Use PBO for async upload
-                    GL.BindBuffer(BufferTarget.PixelUnpackBuffer, _pbo);
-                    IntPtr ptr = GL.MapBuffer(BufferTarget.PixelUnpackBuffer, BufferAccess.WriteOnly);
-                    System.Runtime.InteropServices.Marshal.Copy(_uploadBuffer, 0, ptr, dirtyW * dirtyH * 4);
-                    GL.UnmapBuffer(BufferTarget.PixelUnpackBuffer);
-                    GL.TexSubImage2D(TextureTarget.Texture2D, 0, dirtyX, dirtyY, dirtyW, dirtyH, PixelFormat.Rgba, PixelType.UnsignedByte, IntPtr.Zero);
-                    GL.BindBuffer(BufferTarget.PixelUnpackBuffer, 0);
+                    else if (_pixelBackend is CpuCopyPixelBuffer cpu)
+                    {
+                        cpu.BindSource(pixels);
+                        cpu.CommitDirty(dirtyX, dirtyY, dirtyW, dirtyH);
+                    }
                 }
                 surface.ClearDirty();
             }
@@ -217,6 +257,9 @@ namespace Asmo.Window
         protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
             base.OnRenderFrame(args);
+
+            // Upload latest framebuffer (UI, overlay, etc.) to GPU texture
+            Render(framebuffer, 0, 0);
 
             GL.Clear(ClearBufferMask.ColorBufferBit);
 
@@ -247,6 +290,8 @@ namespace Asmo.Window
                 consoleHost.Draw(framebuffer);
             }
             Render(framebuffer, 0, 0);
+            // Force overlay visible every frame (workaround for accidental hiding)
+            Asmo.DebugOverlay.Current?.Show();
         }
 
         protected override void OnResize(OpenTK.Windowing.Common.ResizeEventArgs e)
@@ -288,7 +333,7 @@ namespace Asmo.Window
         {
             foreach (var file in e.FileNames)
             {
-                string rootDir = null;
+                string? rootDir = null;
                 if (Directory.Exists(file))
                 {
                     // Dropped folder
@@ -372,6 +417,27 @@ namespace Asmo.Window
             GL.DeleteShader(fragShader);
             return program;
         }
+
+                // Title instrumentation removed: SetWindowTitle no-op retained for API compatibility
+                internal void SetWindowTitle(string v)
+                {
+                    if (!string.IsNullOrWhiteSpace(v))
+                    {
+                        _baseTitle = v;
+                        Title = v;
+                        GameEnvironment.WindowTitle = v;
+                    }
+                }
+
+        internal string GetWindowName()
+        {
+            return Title;
+        }
+
+        // Simple heuristic to detect unexpected non-ASCII characters (e.g., accidental corruption / encoding issue)
+        private void ValidateTitleForUnexpectedGlyphs() { }
+
+        private void LogTitleEvent(string msg) { }
 
     }
 }

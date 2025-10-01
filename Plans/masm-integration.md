@@ -19,13 +19,13 @@ Embed the AsmoMASM micro-assembly environment into the Asmo framework so games c
 - Cross-platform MASM runtime beyond the existing Windows-focused SharpMASM implementation.
 - Sandboxing for untrusted scripts (document as future requirement if external mods are planned).
 
-## Milestones
-- [ ] Audit AsmoMASM runtime capabilities: execution model, IO hooks, performance characteristics.
-- [ ] Design integration architecture (host services, memory mapping, event hooks) and update scene plans accordingly.
-- [ ] Implement MASM host service in `Asmo` with lifecycle methods (load, reset, step, shutdown).
-- [ ] Wire MASM rendering commands into the scene manager via a dedicated render layer.
-- [ ] Build demo scene showing MASM script drawing primitives and reacting to input.
-- [ ] Document workflow (building scripts, hot-reload, troubleshooting) in main docs.
+## Milestones (Tracked in `2025-10-roadmap.md`)
+- 🔄 Audit AsmoMASM runtime capabilities: execution model, IO hooks, performance characteristics.
+- 🔄 Design integration architecture (host services, memory mapping, event hooks) and update scene plans accordingly.
+- 🆕 Implement MASM host service in `Asmo` with lifecycle methods (load, reset, step, shutdown).
+- 🆕 Wire MASM rendering commands into the scene manager via a dedicated render layer.
+- 🆕 Build demo scene showing MASM script drawing primitives and reacting to input.
+- 🆕 Document workflow (building scripts, hot-reload, troubleshooting) in main docs.
 
 ## Dependencies
 - `SharpMASM` runtime components (execution engine, memory manager).
@@ -37,13 +37,6 @@ Embed the AsmoMASM micro-assembly environment into the Asmo framework so games c
 - Input events from Asmo (keyboard/gamepad) can be consumed by MASM routines through shared state.
 - Errors in MASM scripts surface clearly to the developer (overlay, console logs) without crashing the host.
 
-## Open Questions
-- **Do we allow MASM scripts to allocate their own surfaces or operate strictly on shared buffers?**
-	- ✅ Resolved: Scripts may allocate their own surfaces within MASM/host memory limits so teams can build full MASM-driven games without relying solely on C# buffers.
-
-- **What security considerations are needed before enabling user-supplied MASM scripts?**
-	- ✅ Resolved: External distribution of arbitrary MASM content isn’t in scope—only trusted developers or open-source projects will ship MASM code for now. Sandbox requirements can be revisited if that assumption changes.
-
-- **Should MASM execution be deterministic for replay/rollback features, and if so how do we enforce it?**
-	- ✅ Resolved: SharpMASM is deterministic given identical inputs; host integration should preserve deterministic input delivery to maintain that guarantee.
+## Open Questions (Resolved & Archived)
+> See roadmap for integration prioritization.
 

@@ -106,6 +106,10 @@ namespace Asmo.Gfx
 
     public class Surface
     {
+        private readonly bool _spanBacked;
+        private readonly Memory<byte> _frameMemory; // RGBA8 if span-backed
+        private readonly byte[]? _rawBytes; // owned when created via width/height ctor (future use)
+        public bool IsSpanBacked => _spanBacked;
         /// <summary>
         /// Draw a rectangle filled with a vertical gradient from colorTop to colorBottom.
         /// </summary>
@@ -159,12 +163,12 @@ namespace Asmo.Gfx
         public int Width { get; }
         public int Height { get; }
         // left null for now
-        public GLFWGraphicsContext Context { get; set; }
+    public GLFWGraphicsContext? Context { get; set; }
         /// <summary>
         /// Reference to the owning window, if any.
         /// </summary>
-        public Asmo.Window.Window Window { get; set; }
-        public Color[][] Pixels { get; }
+    public Asmo.Window.Window? Window { get; set; }
+    public Color[][] Pixels { get; }
 
         public Surface(int width, int height)
         {
@@ -177,6 +181,24 @@ namespace Asmo.Gfx
                 for (int y = 0; y < height; y++)
                     Pixels[x][y] = new Color(0, 0, 0, 255);
             }
+            _spanBacked = false;
+            _frameMemory = Memory<byte>.Empty;
+        }
+
+        /// <summary>
+        /// Construct a surface backed directly by an external RGBA8 memory block (Width*Height*4 bytes).
+        /// Drawing operations write directly into this memory (e.g., a persistently mapped GPU buffer).
+        /// Pixels[][] is not populated for span-backed surfaces (accessing it is expensive if implemented later).
+        /// </summary>
+        public Surface(int width, int height, Memory<byte> externalMemory)
+        {
+            Width = width;
+            Height = height;
+            _frameMemory = externalMemory;
+            if (_frameMemory.Length < width * height * 4)
+                throw new ArgumentException("External memory too small for surface dimensions", nameof(externalMemory));
+            _spanBacked = true;
+            Pixels = new Color[0][]; // sentinel empty; avoid null checks elsewhere
         }
 
         public void FillRect(int x, int y, int width, int height, Surface surface, Color color)
@@ -204,19 +226,46 @@ namespace Asmo.Gfx
 
         public void SetPixel(int x, int y, Color color)
         {
-            if (x >= 0 && x < Width && y >= 0 && y < Height)
+            if (x < 0 || x >= Width || y < 0 || y >= Height) return;
+            if (_spanBacked)
+            {
+                // Top-left origin indexing
+                var span = _frameMemory.Span;
+                int idx = (y * Width + x) * 4;
+                span[idx + 0] = (byte)color.R;
+                span[idx + 1] = (byte)color.G;
+                span[idx + 2] = (byte)color.B;
+                span[idx + 3] = (byte)color.A;
+            }
+            else
             {
                 Pixels[x][y] = color;
-                MarkDirty(x, y);
             }
+            MarkDirty(x, y);
         }
 
         public void Clear(Color color)
         {
-            for (int x = 0; x < Width; x++)
-                for (int y = 0; y < Height; y++)
-                    Pixels[x][y] = color;
-            // Mark the whole surface as dirty
+            if (_spanBacked)
+            {
+                var span = _frameMemory.Span;
+                byte r = (byte)color.R, g = (byte)color.G, b = (byte)color.B, a = (byte)color.A;
+                int total = Width * Height;
+                for (int i = 0; i < total; i++)
+                {
+                    int idx = i * 4;
+                    span[idx + 0] = r;
+                    span[idx + 1] = g;
+                    span[idx + 2] = b;
+                    span[idx + 3] = a;
+                }
+            }
+            else
+            {
+                for (int x = 0; x < Width; x++)
+                    for (int y = 0; y < Height; y++)
+                        Pixels[x][y] = color;
+            }
             dirtyX0 = 0; dirtyY0 = 0; dirtyX1 = Width - 1; dirtyY1 = Height - 1;
         }
 

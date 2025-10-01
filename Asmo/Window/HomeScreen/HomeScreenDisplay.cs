@@ -12,6 +12,7 @@ using OpenTK.Windowing.Desktop;
 using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
 using Microsoft.Xna.Framework;
+using CSCore.Tags.ID3.Frames;
 namespace Asmo.Window.HomeScreen
 {
     public class HomeScreenDisplay
@@ -25,6 +26,7 @@ namespace Asmo.Window.HomeScreen
         private string author = "Charlie Sans";
         private string github = "https://github.com/charlie-sans/Asmo";
         private string description = "A modern C#/.NET retro/modern game console framework.";
+        private Surface _surface;
         private string[] tips = new[]
         {
             "Tip: Use the Settings Panel to change quality modes!",
@@ -35,10 +37,8 @@ namespace Asmo.Window.HomeScreen
         private int tipIndex = 0;
         private double tipTimer = 0;
 
-        // Framegraph state
-        private const int FrameGraphSamples = 120;
-        private float[] frameTimes = new float[FrameGraphSamples];
-        private int frameTimeIndex = 0;
+    // Framegraph state
+    private Asmo.Debug.FrameGraph homeScreenGraph = new Asmo.Debug.FrameGraph(120) { Label = "HomeScreen ms", GraphColor = Asmo.Gfx.Colors.Magenta };
 
 
         // Audio fields for boot chime
@@ -51,8 +51,12 @@ namespace Asmo.Window.HomeScreen
 
             // Ensure DebugOverlay exists
             if (Asmo.DebugOverlay.Current == null)
-                new Asmo.DebugOverlay();
-            Asmo.DebugOverlay.Current?.Show();
+                DebugOverlay.Current = new Asmo.DebugOverlay();
+                Console.WriteLine("[HomeScreen] Created DebugOverlay instance.");
+                Asmo.DebugOverlay.Current.Show();
+            
+            // Register custom framegraph
+            Asmo.DebugOverlay.Current.RegisterFrameGraph(homeScreenGraph);
             // Play boot chime only once per app run
             if (!bootChimePlayed)
             {
@@ -60,15 +64,7 @@ namespace Asmo.Window.HomeScreen
                 {
                     if (audioEngine == null)
                         audioEngine = new AudioEngine();
-
-                    // Use default stereo channels for compatibility
-                    int sampleRate = AudioClip.DefaultSampleRate;
-                    int channels = AudioClip.DefaultChannels;
-                    // audioEngine.PlayClip(AudioClip.CreateSquare(523.25, 0.10, 0.25f, sampleRate, channels), "master"); // C5
-                    // // Thread.Sleep(150);
-                    // audioEngine.PlayClip(AudioClip.CreateSquare(659.25, 0.10, 0.20f, sampleRate, channels), "master"); // E5
-                    // // Thread.Sleep(150);
-                    // audioEngine.PlayClip(AudioClip.CreateSquare(783.99, 0.18, 0.18f, sampleRate, channels), "master"); // G5
+           
                 }
                 catch (Exception ex)
                 {
@@ -76,26 +72,35 @@ namespace Asmo.Window.HomeScreen
                 }
                 bootChimePlayed = true;
             }
-            Asmo.DebugOverlay.Current?.Toggle();
+            Asmo.DebugOverlay.Current.Toggle();
         }
 
-    public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
+        public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
         {
+            if (_surface == null || _surface != framebuffer)
+            {
+                _surface = framebuffer;
+                Console.WriteLine($"[HomeScreen] Surface assigned in RenderHomeScreen. Size: {_surface.Width}x{_surface.Height}");
+            }
+            // Only enforce canonical title if still at home screen and not already changed by a loaded game.
+            if (!GameEnvironment.WindowTitle.Equals(Asmo.Window.Window.CanonicalTitle, StringComparison.Ordinal))
+            {
+                // Respect externally set title (e.g., a game) – do not overwrite.
+            }
+            else if (framebuffer.Window.GetWindowName() != Asmo.Window.Window.CanonicalTitle)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HomeScreen] Restoring canonical title '{Asmo.Window.Window.CanonicalTitle}' (was '{framebuffer.Window.GetWindowName()}')");
+                framebuffer.Window.SetWindowTitle(Asmo.Window.Window.CanonicalTitle);
+            }
             // --- Raw FPS display ---
-            float lastMs = frameTimes[(frameTimeIndex - 1 + FrameGraphSamples) % FrameGraphSamples];
-            float rawFps = lastMs > 0.01f ? 1000.0f / lastMs : 0f;
+            float frameMs = (float)(e.Time * 1000.0);
+            homeScreenGraph.AddSample(frameMs);
+            float rawFps = frameMs > 0.01f ? 1000.0f / frameMs : 0f;
             string fpsText = $"FPS: {rawFps:F1}";
             int fpsTextX = (framebuffer.Width - 80) / 2;
             int fpsTextY = framebuffer.Height - (40 * 2) - 32; // above the graphs
-            // Console.WriteLine(fpsText);
-            // Use Mouse class for mouse state (passed in)
             int mouseX = (int)mouse.X;
             int mouseY = (int)mouse.Y;
-
-            // --- Framegraph update ---
-            // Store the latest frame time (in ms)
-            frameTimes[frameTimeIndex] = (float)(e.Time * 1000.0); // ms
-            frameTimeIndex = (frameTimeIndex + 1) % FrameGraphSamples;
 
             // Cycle tips every 5 seconds
             tipTimer += e.Time;
@@ -113,21 +118,25 @@ namespace Asmo.Window.HomeScreen
             int panelX = (framebuffer.Width - panelW) / 2;
             int panelY = (framebuffer.Height - panelH) / 2;
             framebuffer.DrawOutlinedRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8, Colors.Cyan);
+            Asmo.DebugOverlay.Current.RegisterDrawCall();
             // Gradient panel background
             framebuffer.DrawVerticalGradientRect(
                 panelX, panelY, panelW, panelH,
                 new Asmo.Types.Color(16, 16, 48, 220), // top color
                 new Asmo.Types.Color(32, 32, 64, 220)  // bottom color
             );
+            Asmo.DebugOverlay.Current.RegisterDrawCall();
+            // Asmo.DebugOverlay.Current.DrawFpsGraph(framebuffer, 8, framebuffer.Height - 40 - 8, 120, 40);
+            // Asmo.DebugOverlay.Current.DrawFrameTimeGraph(framebuffer, 8, framebuffer.Height - 80 - 16, 120, 40);
 
             int y = panelY + 18;
-            framebuffer.DrawText(panelX + 20, y, $"ASMO GAME CONSOLE", Colors.Yellow); y += 20;
-            framebuffer.DrawText(panelX + 20, y, $"Drop a game file (DLL or ZIP) to play!", Colors.White); y += 18;
-            framebuffer.DrawText(panelX + 20, y, $"(Or drag a folder with a game DLL)", Colors.Gray); y += 18;
-            framebuffer.DrawText(panelX + 20, y, $"Version: {version}", Colors.Cyan); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"{github}", Colors.Blue); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"GPU Drivers: {GL.GetString(StringName.Version)}", Colors.Blue); y += 16;
-            framebuffer.DrawText(panelX + 20, y, $"GPU Name: {GL.GetString(StringName.Vendor)}", Colors.Green); y += 16;
+            framebuffer.DrawText(panelX + 20, y, $"ASMO GAME CONSOLE", Colors.Yellow); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 20;
+            framebuffer.DrawText(panelX + 20, y, $"Drop a game file (DLL or ZIP) to play!", Colors.White); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 18;
+            framebuffer.DrawText(panelX + 20, y, $"(Or drag a folder with a game DLL)", Colors.Gray); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 18;
+            framebuffer.DrawText(panelX + 20, y, $"Version: {version}", Colors.Cyan); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
+            framebuffer.DrawText(panelX + 20, y, $"{github}", Colors.Blue); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
+            framebuffer.DrawText(panelX + 20, y, $"GPU Drivers: {GL.GetString(StringName.Version)}", Colors.Blue); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
+            framebuffer.DrawText(panelX + 20, y, $"GPU Name: {GL.GetString(StringName.Vendor)}", Colors.Green); Asmo.DebugOverlay.Current.RegisterDrawCall(); y += 16;
 
             // --- Framebuffer Resize Test Button ---
             int buttonX = panelX + 20;
@@ -143,18 +152,23 @@ namespace Asmo.Window.HomeScreen
 
             // Tips area (bottom of panel)
             int tipY = panelY + panelH - 24;
-            framebuffer.DrawText(panelX + 20, tipY, tips[tipIndex], Colors.Green);
+            framebuffer.DrawText(panelX + 20, tipY, tips[tipIndex], Colors.Green); Asmo.DebugOverlay.Current?.RegisterDrawCall();
             if (GameEnvironment.ShowFps)
             {
-                framebuffer.DrawText(fpsTextX, fpsTextY, fpsText, Colors.White);
+                framebuffer.DrawText(fpsTextX, fpsTextY, fpsText, Colors.White); Asmo.DebugOverlay.Current?.RegisterDrawCall();
                 // Removed manual frame time and FPS graph drawing. DebugOverlay handles this now.
             }
             // Draw mouse cursor
             if (mouseX >= 0 && mouseY >= 0 && mouseX < framebuffer.Width && mouseY < framebuffer.Height)
             {
                 framebuffer.DrawOutlinedRect(mouseX - 4, mouseY - 4, 9, 9, Colors.Magenta);
+                Asmo.DebugOverlay.Current.RegisterDrawCall();
             }
-            Asmo.DebugOverlay.Current?.Render(framebuffer);
+            if (GameEnvironment.ShowFps)
+            {
+                Asmo.DebugOverlay.Current.Render(framebuffer);
+                Asmo.DebugOverlay.Current.Show();
+            }
         }
     }
 }

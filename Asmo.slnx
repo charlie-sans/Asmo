@@ -10,5 +10,6 @@
   <Project Path="Demos/chippy/chippy.csproj" />
   <Project Path="Demos/Asteroids/AsteroidsGame.csproj" />
   <Project Path="Demos/CSCoreDemo/CSCoreDemo.csproj" />
-  <Project Path="Demos/WordProcessor/TemplateGame.csproj" />
+  <!-- <Project Path="Demos/WordProcessor/TemplateGame.csproj" /> -->
+  <Project Path="Demos/GUIDemo/TemplateGame.csproj" />
 </Solution>
