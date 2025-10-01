@@ -1,0 +1,46 @@
+; MNI Example Program
+; Demonstrates string operations and file I/O
+
+; Store some string data
+DB $1000 "Hello, "
+DB $2000 "World!"
+DB $3000 "example.txt"
+
+; Concatenate strings
+MOV R1 1000
+MOV R2 2000
+MOV R3 4000
+MNI StringOperations.concat R1 R2 R3
+
+; Print the result
+MOV R1 4000
+MNI IO.write 1 R1
+MNI IO.flush 1
+
+; Write string to file
+MOV R1 3000 
+ ; Filename
+MOV R2 4000 
+ ; Content
+MNI FileOperations.writeFile R1 R2
+
+; Read file back
+MOV R1 3000
+  ; Filename
+MOV R2 5000 
+ ; Destination
+MNI FileOperations.readFile R1 R2
+
+; Print file content to verify
+MOV R1 5000
+MNI IO.write 1 R1
+MNI IO.flush 1
+
+; Get string length
+MOV R1 4000
+MNI StringOperations.length R1 R4
+MOV R1 R4
+OUT 1 R1 
+   ; Print the length
+
+HLT

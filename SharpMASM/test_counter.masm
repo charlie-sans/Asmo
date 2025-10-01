@@ -1,0 +1,28 @@
+;; Test program for labels and function calls
+
+;; Initialize counter
+MOV R1 0
+MOV R2 10
+
+;; Main loop
+LBL loop
+    ;; Call print function
+    CALL #print_counter
+    
+    ;; Increment counter
+    INC R1
+    
+    ;; Compare with limit
+    CMP R1 R2
+    JE #done #loop
+    
+LBL done
+    ;; Print completion message
+    DB $500 "Done counting!"
+    OUT 1 $500
+    HLT
+
+;; Function to print the current counter value
+LBL print_counter
+    OUT 1 R1
+    RET

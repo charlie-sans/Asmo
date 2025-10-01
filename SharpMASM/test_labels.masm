@@ -1,0 +1,24 @@
+;; Test program for labels and jumps
+
+;; Initialize counter
+MOV R1 0
+MOV R2 10
+
+;; Define a label for the loop
+LBL loop
+    ;; Print the counter
+    OUT 1 R1
+    
+    ;; Increment the counter
+    INC R1
+    
+    ;; Compare counter with 10
+    CMP R1 R2
+    
+    ;; Jump to loop if counter < 10
+    JE #end #loop
+
+LBL end
+    OUT 1 $100
+    DB $100 "Loop complete!"
+    HLT

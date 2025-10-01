@@ -1,0 +1,29 @@
+lbl main
+    db $100 "data $numfmt = { b \"%ld\n\", b 0 } "
+    db $150 "data $strfmt = { b \"%s\n\", b 0 } " 
+    db $200 "export function w $main() { "
+    db $250 "@start"
+    db $300 " %num =l alloc8 8"
+    db $350 " storel 42, %num"
+    db $400 "    %val =l loadl %num"
+    db $450 "    call $printf(l $numfmt, l %val)"
+    db $500 "    call $printf(l $strfmt, l $str_hello)"
+    db $550 "    ret 0"
+    db $600 "}"
+    db $650 "data $str_hello = { b \"Hello, QBE!\", b 0 }"
+    mov R1 100
+    mov R2 650
+    mov R0 1500
+     ; Ensure the address is prefixed with $
+
+    db $1500 "output.qbe"
+
+    ; Initialize memory range with meaningful data
+    db $1000 "This is a test string stored in memory."
+    db $1040 "Another string in memory for testing."
+    mov R1 1000
+    mov R2 1040
+
+    ; Write memory content to file
+    MNI FileOperations.writeMemFile R0 R1 R2
+    hlt

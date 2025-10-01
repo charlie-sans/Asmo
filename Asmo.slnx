@@ -6,10 +6,10 @@
   <Project Path="Demos/AstrOS/AstrOS.csproj" />
   <Project Path="Demos/AstroTestGame/AstroTestGame.csproj" />
   <Project Path="Demos/SceneDemo/SceneDemo.csproj" />
-  <Project Path="AsmoMASM/SharpMASM.csproj" />
+  <Project Path="SharpMASM/SharpMASM.csproj" />
   <Project Path="Demos/chippy/chippy.csproj" />
   <Project Path="Demos/Asteroids/AsteroidsGame.csproj" />
   <Project Path="Demos/CSCoreDemo/CSCoreDemo.csproj" />
   <!-- <Project Path="Demos/WordProcessor/TemplateGame.csproj" /> -->
-  <Project Path="Demos/GUIDemo/TemplateGame.csproj" />
+  <Project Path="Demos/turtle/TemplateGame.csproj" />
 </Solution>

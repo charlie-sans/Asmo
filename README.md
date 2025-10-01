@@ -60,6 +60,17 @@ Guidelines (draft):
 
 ---
 
+
+## Notes.
+
+when developing games with Asmo, sometimes Dotnet won't grab your libraries correctly. If you encounter issues, try the following steps:
+1. set the output type to Exe in your .csproj file
+2. define a empty Main method in your game project "tricks" dotnet to treat it as an executable and include all dependencies correctly.
+3. build your project again.
+
+that should resolve most dependency issues.
+---
+
 ## 📄 License
 
 AGPL v3

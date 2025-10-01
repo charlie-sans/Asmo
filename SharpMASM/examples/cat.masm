@@ -1,0 +1,23 @@
+# Define format strings
+data $numfmt = { b "%ld\n", b 0 }  # Format for printing numbers
+data $strfmt = { b "%s\n", b 0 }   # Format for printing strings
+
+# Main function
+export function w $main() {
+@start
+    # Allocate space for a number
+    %num =l alloc8 8
+    storel 42, %num  # Store the number 42
+
+    # Load the number and print it
+    %val =l loadl %num
+    call $printf(l $numfmt, l %val)
+
+    # Print a string
+    call $printf(l $strfmt, l $str_hello)
+
+    ret 0
+}
+
+# Define a string constant
+data $str_hello = { b "Hello, QBE!", b 0 }
