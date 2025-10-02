@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
     <!-- specify the main method entry point -->
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  <!-- Enable OpenXR scaffold code and start OpenGL session scaffolding -->
+  <DefineConstants>$(DefineConstants);USE_OPENXR;OPENXR_GL_IMPLEMENTED</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +20,7 @@
 
   <ItemGroup>
     <PackageReference Include="CSCore" Version="1.2.1.2" />
+    <PackageReference Include="Evergine.Bindings.OpenXR" Version="2025.9.1.27" />
     <PackageReference Include="FNA.NET" Version="2.1.2.2506" />
     <PackageReference Include="OpenTK" Version="4.9.4" />
     <PackageReference Include="SixLabors.Fonts" Version="2.1.3" />

@@ -12,6 +12,74 @@ namespace SharpMASM
         // Add a stack to store return addresses for CALL instructions
         private static Stack<long> callStack = new Stack<long>();
 
+        /// <summary>
+        /// Execute a single instruction at the current instruction pointer.
+        /// Returns true if execution should continue, false if halted or finished.
+        /// </summary>
+        public static bool Step(Instructions instructions)
+        {
+            if (instructions == null) return false;
+
+            // If we've reached or passed the end, stop.
+            if (Instructions.GetInstance().instructionPointer >= Instructions.GetInstance().instructionCount)
+            {
+                return false;
+            }
+
+            long currentPos = Instructions.GetInstance().instructionPointer;
+            instruction i = Instructions.GetInstance().GetInstruction();
+            if (CmdArgs.GetInstance().Verbose || CmdArgs.GetInstance().VeryVerbose)
+            {
+                Console.WriteLine($"[Step] Executing instruction at position {currentPos}: {i.name} {string.Join(" ", i.args)}");
+            }
+
+            switch (i.name.ToLower())
+            {
+                case "mov": Functions.Mov(i); break;
+                case "add": Functions.Add(i); break;
+                case "sub": Functions.Sub(i); break;
+                case "mul": Functions.Mul(i); break;
+                case "div": Functions.Div(i); break;
+                case "and": Functions.And(i); break;
+                case "or": Functions.Or(i); break;
+                case "xor": Functions.Xor(i); break;
+                case "not": Functions.Not(i); break;
+                case "db": Functions.DB(i); break;
+                case "out": Functions.Out(i); break;
+                case "cout": Functions.Cout(i); break;
+                case "push": Functions.Push(i); break;
+                case "pop": Functions.Pop(i); break;
+                case "inc": Functions.Inc(i); break;
+                case "dec": Functions.Dec(i); break;
+                case "cmp": Functions.Cmp(i); break;
+                case "je": JumpIfEqual(i); break;
+                case "jl": JumpIfLess(i); break;
+                case "jne": JumpIfNotEqual(i); break;
+                case "jz": JumpIfEqual(i); break; // alias
+                case "jnz": JumpIfNotEqual(i); break; // alias
+                case "jmp": Jump(i); break;
+                case "call": Call(i); break;
+                case "ret": Return(); break;
+                case "hlt":
+                    if (Common.exitOnHLT) return false; else break;
+                case "exit":
+                    ExitProgram(i); return false;
+                case "mni": Functions.MNI(i); break;
+                default:
+                    Common.box("Error", "Unknown instruction: " + i.name, "error");
+                    throw new MASMException("Unknown instruction: " + i.name);
+            }
+            Console.WriteLine($"[Step] Instruction pointer moved to {Instructions.GetInstance().instructionPointer}");
+            Console.WriteLine($"[Step] Current instruction: {Instructions.GetInstance().GetInstruction().name}");
+            Console.WriteLine($"[Step] Instruction args: {string.Join(", ", Instructions.GetInstance().GetInstruction().args)}");
+            Console.WriteLine($"[Step] Instruction pointer: {Instructions.GetInstance().instructionPointer}");
+            Console.WriteLine($"[Step] Instruction count: {Instructions.GetInstance().instructionCount}");
+            Console.WriteLine($"[Step] Call stack depth: {callStack.Count}");
+            Console.WriteLine($"[Step] Registers: {string.Join(", ", Common.Registers.Select(r => r + "=" + MappedMemoryFile.GetInstance(Common.MappedFile).Read(r)))}");
+            // Continue while there are still instructions
+            return Instructions.GetInstance().instructionPointer < Instructions.GetInstance().instructionCount;
+        }
+
         public static Instructions Process_File(string[] lines)
         {
             Instructions.ResetInstructionPointer();
@@ -116,6 +184,12 @@ namespace SharpMASM
                     case "jne":
                         JumpIfNotEqual(i);
                         break;
+                    case "jz":
+                        JumpIfEqual(i);
+                        break;
+                    case "jnz":
+                        JumpIfNotEqual(i);
+                        break;
                     case "jmp":
                         Jump(i);
                         break;
@@ -175,7 +249,7 @@ namespace SharpMASM
             }
 
             string targetLabel;
-            string elseLabel = null;
+            string? elseLabel = null;
 
             // Get the comparison result from the flags
             bool isEqual = Functions.ComparisonFlags.IsEqual;
@@ -390,7 +464,7 @@ namespace SharpMASM
 
             public static Instructions GetInstance()
             {
-                return Common.InstructionInstance;
+                return Common.InstructionInstance!; // Assumed initialized by parsing/loading phase
             }
             
             public static void ResetInstructionPointer()

@@ -1,0 +1,43 @@
+; demo.masm - draws a cyan box at (40,40) with size 12x12
+; Uses MNI Graphics.setPixel
+
+lbl main
+    DB $1500 "Graphics"
+    mov R0 40
+          ; x
+    mov R1 40
+          ; y
+    mov R2 12 
+         ; w
+    mov R3 34
+          ; h
+    mov R4 102387
+      ; ARGB cyan
+    call #draw_box
+    out 1 $1500
+    hlt
+
+lbl draw_box
+    out 1 $1500
+    mov R10 R0
+         ; x0
+    add R10 R2 
+        ; x1 = x0 + w
+    mov R11 R1
+         ; y0
+    add R11 R3
+         ; y1 = y0 + h
+    mov R12 R1
+         ; y = y0
+lbl loop_y
+    mov R13 R0
+         ; x = x0
+lbl loop_x
+    mni Graphics.setPixel R13 R12 R4
+    inc R13
+    cmp R13 R10
+    jl #loop_x
+    inc R12
+    cmp R12 R11
+    jl #loop_y
+    ret

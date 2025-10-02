@@ -9,7 +9,7 @@
   <Project Path="SharpMASM/SharpMASM.csproj" />
   <Project Path="Demos/chippy/chippy.csproj" />
   <Project Path="Demos/Asteroids/AsteroidsGame.csproj" />
-  <Project Path="Demos/CSCoreDemo/CSCoreDemo.csproj" />
+  <Project Path="Demos/renderer/meow.csproj" />
   <!-- <Project Path="Demos/WordProcessor/TemplateGame.csproj" /> -->
-  <Project Path="Demos/turtle/TemplateGame.csproj" />
+  <Project Path="Demos/masmTests/TemplateGame.csproj" />
 </Solution>

@@ -6,12 +6,12 @@ namespace SharpMASM.MNI.Modules
     [MNIClass("Graphics")]
     public class GraphicsModule
     {
-        private static MappedMemoryFile _memory;
+        private static IMemoryManager? _memory;
         private static long _framebufferAddress;
         private static int _width;
         private static int _height;
 
-        public static void Initialize(MappedMemoryFile memory, long framebufferAddress, int width, int height)
+        public static void Initialize(IMemoryManager memory, long framebufferAddress, int width, int height)
         {
             _memory = memory;
             _framebufferAddress = framebufferAddress;
@@ -29,8 +29,10 @@ namespace SharpMASM.MNI.Modules
             {
                 if (x >= 0 && x < _width && y >= 0 && y < _height)
                 {
-                    long address = _framebufferAddress + (y * _width + x) * 4; // assuming 4 bytes per pixel
-                    _memory.Write(address.ToString(), color);
+                    long address = _framebufferAddress + (y * _width + x); // one pixel per element (ARGB packed in long)
+                    // ArrayMemoryManager expects raw index when using $address form via Write(string,long)
+                    // We pass address as direct numeric string with '$' prefix to be consistent with interpreted addressing.
+                    _memory!.Write("$" + address.ToString(), color);
                 }
             }
         }
@@ -44,8 +46,8 @@ namespace SharpMASM.MNI.Modules
             {
                 if (x >= 0 && x < _width && y >= 0 && y < _height)
                 {
-                    long address = _framebufferAddress + (y * _width + x) * 4;
-                    return _memory.Read(address.ToString()).ToString();
+                    long address = _framebufferAddress + (y * _width + x);
+                    return _memory!.Read("$" + address.ToString()).ToString();
                 }
             }
             return "0";
@@ -59,8 +61,8 @@ namespace SharpMASM.MNI.Modules
             {
                 for (int i = 0; i < _width * _height; i++)
                 {
-                    long address = _framebufferAddress + i * 4;
-                    _memory.Write(address.ToString(), color);
+                    long address = _framebufferAddress + i;
+                    _memory!.Write("$" + address.ToString(), color);
                 }
             }
         }

@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="OpenTK" Version="4.9.4" />
+        <PackageReference Include="Evergine.Bindings.OpenXR" Version="2025.9.1.27" />
     </ItemGroup>
 
   <!-- we included these in the binary, not removing this yet. might need it. -->

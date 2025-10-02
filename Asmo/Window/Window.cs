@@ -21,7 +21,20 @@ namespace Asmo.Window
 {
     public class Window : GameWindow
     {
+        public bool UseVr { get; private set; }
+    private VrManager? _vr;
         // Central canonical window title (update here if you want to rename globally)
+
+        public Window(GameWindowSettings settings, bool useVr = false)
+            : this(settings)
+        {
+            UseVr = useVr;
+            if (UseVr)
+            {
+                _vr = new VrManager();
+                _vr.InitOpenXR_OpenGL(); // best-effort, will fallback if not available
+            }
+        }
         public const string CanonicalTitle = "ASMO Game Console";
         private bool gameLoaded = false;
         private int _texture;
@@ -289,31 +302,48 @@ namespace Asmo.Window
 
         protected override void OnRenderFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
-            base.OnRenderFrame(args);
+            // base.OnRenderFrame(args);
+    
             // Render overlay (after scene/UI updates done in UpdateFrame) onto framebuffer before upload
             Asmo.DebugOverlay.Current?.Render(framebuffer);
             // Upload latest framebuffer (UI + overlay) to GPU texture
             Render(framebuffer, 0, 0);
 
-            GL.Clear(ClearBufferMask.ColorBufferBit);
-
-            // Ensure viewport is correct (in case window was resized)
-            UpdateViewport();
-
-            GL.UseProgram(_shaderProgram);
-            GL.ActiveTexture(TextureUnit.Texture0);
-            GL.BindTexture(TextureTarget.Texture2D, _texture);
-            GL.BindVertexArray(_vao);
-            GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, 0);
-            SwapBuffers();
+            if (UseVr && _vr != null && _vr.Initialized)
+            {
+                _vr.BeginFrame();
+                // Submit the framebuffer texture as a quad layer (placeholder)
+                _vr.SubmitQuadLayer(_texture, _width, _height);
+                _vr.EndFrame();
+            }
+            else
+            {
+                GL.Clear(ClearBufferMask.ColorBufferBit);
+                UpdateViewport();
+                GL.UseProgram(_shaderProgram);
+                GL.ActiveTexture(TextureUnit.Texture0);
+                GL.BindTexture(TextureTarget.Texture2D, _texture);
+                GL.BindVertexArray(_vao);
+                GL.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, 0);
+                SwapBuffers();
+            }
 
         }
 
         protected override void OnUpdateFrame(OpenTK.Windowing.Common.FrameEventArgs args)
         {
-            base.OnUpdateFrame(args);
+            // base.OnUpdateFrame(args);
+            if (!IsFocused)
+            {
+                // Skip updates when not focused to save CPU/GPU
+                System.Threading.Thread.Sleep(100);
+                return;
+            }
+
+                
             Asmo.DebugOverlay.Current?.BeginFrame();
-            framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
+            if (!gameLoaded)
+                framebuffer.Clear(new Color(0, 0, 32, 255)); // dark blue background
             if (!gameLoaded)
             {
                 // Always pass the Mouse instance to HomeScreenDisplay
