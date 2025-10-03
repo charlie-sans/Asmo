@@ -1,5 +1,4 @@
 using System;
-using Asmo.Audio;
 using Asmo.Gfx;
 using Asmo.Window.input;
 
@@ -13,7 +12,7 @@ namespace Asmo.Scenes
     protected SceneManager SceneManager { get; private set; } = null!;
     protected Surface Surface { get; private set; } = null!;
     protected SceneServices Services => SceneManager.Services;
-    protected AudioEngine AudioEngine { get; private set; } = null!;
+    // AudioEngine removed in aggressive cleanup; reintroduce later.
 
         public virtual void Init(Surface surface)
         {
@@ -31,15 +30,11 @@ namespace Asmo.Scenes
         /// </summary>
         protected virtual void RegisterCoreServices(Surface surface)
         {
-            if (surface.Window != null)
-            {
-                var keyboard = new Keyboard(surface.Window);
-                Services.Register(keyboard);
-            }
+            // Register Raylib keyboard shim
+            Services.Register(new Keyboard());
 
             Services.Register(surface);
-            AudioEngine = new AudioEngine();
-            Services.Register(AudioEngine);
+            // Audio removed for now.
         }
 
         /// <summary>
@@ -50,12 +45,7 @@ namespace Asmo.Scenes
         public virtual void Update(double deltaTime)
         {
             SceneManager.Update(deltaTime);
-            AudioEngine.Update(deltaTime);
-
-            if (Services.TryGet<Keyboard>(out var keyboard))
-            {
-                keyboard!.Update();
-            }
+            if (Services.TryGet<Keyboard>(out var keyboard)) keyboard!.Update();
         }
 
         public virtual void Draw(Surface surface)

@@ -8,8 +8,8 @@
     <Nullable>enable</Nullable>
     <!-- specify the main method entry point -->
       <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  <!-- Enable OpenXR scaffold code and start OpenGL session scaffolding -->
-  <DefineConstants>$(DefineConstants);USE_OPENXR;OPENXR_GL_IMPLEMENTED</DefineConstants>
+  <!-- Removed VR/OpenXR symbols (can be reintroduced later); enable new Raylib backend flag -->
+  <DefineConstants>$(DefineConstants);USE_RAYLIB;USE_RAYLIB_AUDIO</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,10 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CSCore" Version="1.2.1.2" />
-    <PackageReference Include="Evergine.Bindings.OpenXR" Version="2025.9.1.27" />
-    <PackageReference Include="FNA.NET" Version="2.1.2.2506" />
-    <PackageReference Include="OpenTK" Version="4.9.4" />
+  <!-- CSCore removed after migration to Raylib audio -->
+  <PackageReference Include="Raylib-cs" Version="5.0.0" />
+  <PackageReference Include="Evergine.Bindings.OpenXR" Version="2025.9.1.27" />
+  <!-- Removed FNA.NET (unused after Raylib migration) -->
+  <!-- Removed OpenTK dependency (aggressive cleanup) -->
     <PackageReference Include="SixLabors.Fonts" Version="2.1.3" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.11" />
     <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
@@ -34,7 +35,19 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Window\Keyboard\" />
+    <!-- Exclude legacy OpenTK-based window + input + GL font atlas implementations -->
+    <Compile Remove="Window\Window.cs" />
+    <Compile Remove="Window\GpuPixelBuffer.cs" />
+    <Compile Remove="Window\CpuCopyPixelBuffer.cs" />
+    <Compile Remove="Window\input\Keyboard.cs" />
+    <Compile Remove="Window\input\Mouse.cs" />
+    <Compile Remove="Gfx\FontAtlas.cs" />
+    <Compile Remove="Gfx\RuntimeFontAtlas.cs" />
+    <Compile Remove="vgmsharp\**" />
+    <Compile Remove="Sound\ChipTunePlayer.cs" />
+    <!-- Re-enabled Audio directory (removed aggressive exclusion) -->
+    <EmbeddedResource Remove="vgmsharp\**" />
+    <None Remove="vgmsharp\**" />
   </ItemGroup>
 
 </Project>

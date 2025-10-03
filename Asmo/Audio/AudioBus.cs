@@ -64,7 +64,9 @@ namespace Asmo.Audio
                 _instances.Add(instance);
             }
 
+#if !USE_RAYLIB_AUDIO
             _engine.EnsureOutputRunning();
+#endif
 
             return new AudioHandle(instance, this);
         }

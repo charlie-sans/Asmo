@@ -1,28 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-using CSCore;
 
 namespace Asmo.Audio
 {
-    internal sealed class AudioMixerSource : ISampleSource
+    internal sealed class AudioMixerSource
     {
         private readonly List<AudioBus> _rootBuses = new();
         private readonly object _lock = new();
+        public int SampleRate { get; }
+        public int Channels { get; }
 
         public AudioMixerSource(int sampleRate, int channels)
         {
             if (sampleRate <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRate));
             if (channels <= 0) throw new ArgumentOutOfRangeException(nameof(channels));
-
-            WaveFormat = new WaveFormat(sampleRate, 32, channels, AudioEncoding.IeeeFloat);
+            SampleRate = sampleRate;
+            Channels = channels;
             AudioDiagnostics.Log($"AudioMixerSource created (sampleRate={sampleRate}, channels={channels}).");
         }
-
-        public WaveFormat WaveFormat { get; }
+        
         public bool CanSeek => false;
-        public long Length => 0;
-        public long Position { get => 0; set { } }
 
         public void AddRootBus(AudioBus bus)
         {
@@ -41,10 +39,18 @@ namespace Asmo.Audio
             {
                 foreach (var bus in _rootBuses)
                 {
-                    bus.Mix(buffer, offset, count, WaveFormat.Channels, 1f, 0f);
+                    bus.Mix(buffer, offset, count, Channels, 1f, 0f);
                 }
             }
-            LogBuffer(buffer, offset, count, WaveFormat.Channels);
+            // Light headroom (prevent hard clipping); scale instead of non-linear soft clip to reduce added harmonics.
+            const float headroom = 0.9f;
+            for (int i = 0; i < count; i++)
+            {
+                float s = buffer[offset + i] * headroom;
+                if (s > 1f) s = 1f; else if (s < -1f) s = -1f;
+                buffer[offset + i] = s;
+            }
+            LogBuffer(buffer, offset, count, Channels);
             return count;
         }
 

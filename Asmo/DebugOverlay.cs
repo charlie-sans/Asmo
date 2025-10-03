@@ -21,17 +21,15 @@ namespace Asmo
         private int _drawCallCount = 0;
         private long _lastMemory = 0;
         private StringBuilder _sb = new StringBuilder();
-        private Asmo.Window.input.Keyboard? _keyboard;
-        
-        public void SetKeyboard(Asmo.Window.input.Keyboard keyboard)
-        {
-            _keyboard = keyboard;
-        }
+        // Legacy keyboard reference removed after migrating to Raylib; future: inject RaylibKeyboard if needed.
 
         public DebugOverlay()
         {
             Current = this;
         }
+
+        // Legacy API compatibility (no-op now that input is Raylib-based)
+        public void SetKeyboard(object? _) { }
 
         public void Toggle() => _visible = !_visible;
         public void Show() => _visible = true;
@@ -164,10 +162,7 @@ namespace Asmo
                 _sb.AppendLine($"Dirty Pixels: {_lastTouchedPixels}/{_lastTotalPixels} ({pct:F1}%)");
             }
             // Input state panel
-            if (_keyboard != null)
-            {
-                // _sb.AppendLine("Keys: " + string.Join(", ", _keyboard.GetPressedKeys()));
-            }
+            // (Keyboard state display removed during Raylib migration.)
             surface.DrawText(8, 8, _sb.ToString(), Asmo.Gfx.Colors.White);
             // Draw a visible watermark in the corner
             surface.DrawText(surface.Width - 180, 8, "DEBUG OVERLAY ACTIVE", Asmo.Gfx.Colors.Magenta);

@@ -1,5 +1,4 @@
 using Asmo.Types;
-using OpenTK.Windowing.Desktop;
 
 namespace Asmo.Gfx
 {
@@ -110,22 +109,53 @@ namespace Asmo.Gfx
         private readonly Memory<byte> _frameMemory; // RGBA8 if span-backed
         private readonly byte[]? _rawBytes; // owned when created via width/height ctor (future use)
         public bool IsSpanBacked => _spanBacked;
+    /// <summary>
+    /// Direct RGBA8 frame memory when span-backed; null otherwise.
+    /// </summary>
+    public Memory<byte>? FrameMemory => _spanBacked ? _frameMemory : null;
         /// <summary>
         /// Draw a rectangle filled with a vertical gradient from colorTop to colorBottom.
         /// </summary>
         public void DrawVerticalGradientRect(int x, int y, int width, int height, Asmo.Types.Color colorTop, Asmo.Types.Color colorBottom)
         {
-            for (int iy = 0; iy < height; iy++)
+            if (_spanBacked)
             {
-                float t = height > 1 ? iy / (float)(height - 1) : 0f;
-                byte r = (byte)(colorTop.R + t * (colorBottom.R - colorTop.R));
-                byte g = (byte)(colorTop.G + t * (colorBottom.G - colorTop.G));
-                byte b = (byte)(colorTop.B + t * (colorBottom.B - colorTop.B));
-                byte a = (byte)(colorTop.A + t * (colorBottom.A - colorTop.A));
-                var rowColor = new Asmo.Types.Color(r, g, b, a);
-                for (int ix = 0; ix < width; ix++)
+                var span = _frameMemory.Span;
+                for (int iy = 0; iy < height; iy++)
                 {
-                    SetPixel(x + ix, y + iy, rowColor);
+                    float t = height > 1 ? iy / (float)(height - 1) : 0f;
+                    byte r = (byte)(colorTop.R + t * (colorBottom.R - colorTop.R));
+                    byte g = (byte)(colorTop.G + t * (colorBottom.G - colorTop.G));
+                    byte b = (byte)(colorTop.B + t * (colorBottom.B - colorTop.B));
+                    byte a = (byte)(colorTop.A + t * (colorBottom.A - colorTop.A));
+                    int destY = y + iy; if (destY < 0 || destY >= Height) continue;
+                    int baseIndex = (destY * Width + x) * 4;
+                    int maxX = Math.Min(width, Width - x);
+                    for (int ix = 0; ix < maxX; ix++)
+                    {
+                        int di = baseIndex + ix * 4;
+                        span[di + 0] = r;
+                        span[di + 1] = g;
+                        span[di + 2] = b;
+                        span[di + 3] = a;
+                    }
+                    // track dirty bounds per row
+                    MarkDirty(x, destY);
+                    MarkDirty(x + maxX - 1, destY);
+                }
+            }
+            else
+            {
+                for (int iy = 0; iy < height; iy++)
+                {
+                    float t = height > 1 ? iy / (float)(height - 1) : 0f;
+                    byte r = (byte)(colorTop.R + t * (colorBottom.R - colorTop.R));
+                    byte g = (byte)(colorTop.G + t * (colorBottom.G - colorTop.G));
+                    byte b = (byte)(colorTop.B + t * (colorBottom.B - colorTop.B));
+                    byte a = (byte)(colorTop.A + t * (colorBottom.A - colorTop.A));
+                    var rowColor = new Asmo.Types.Color(r, g, b, a);
+                    for (int ix = 0; ix < width; ix++)
+                        SetPixel(x + ix, y + iy, rowColor);
                 }
             }
         }
@@ -162,13 +192,10 @@ namespace Asmo.Gfx
 
         public int Width { get; }
         public int Height { get; }
-        // left null for now
-    public GLFWGraphicsContext? Context { get; set; }
-        /// <summary>
-        /// Reference to the owning window, if any.
-        /// </summary>
-    public Asmo.Window.Window? Window { get; set; }
+        // Legacy OpenTK context / window references removed during Raylib migration.
     public Color[][] Pixels { get; }
+        // Legacy demos accessed surface.Window to pass into Keyboard/Mouse constructors. Provide null stub.
+        public object? Window => null;
 
         public Surface(int width, int height)
         {
@@ -272,12 +299,37 @@ namespace Asmo.Gfx
         public void DrawRect(int x, int y, int w, int h, Color color)
         {
             Asmo.DebugOverlay.Current?.RegisterDrawCall();
-            for (int ix = x; ix < x + w; ix++)
-                for (int iy = y; iy < y + h; iy++)
-                    SetPixel(ix, iy, color);
-            // Mark the affected region as dirty
-            MarkDirty(x, y);
-            MarkDirty(x + w - 1, y + h - 1);
+            if (_spanBacked)
+            {
+                var span = _frameMemory.Span;
+                int clampedW = Math.Min(w, Width - x);
+                int clampedH = Math.Min(h, Height - y);
+                if (clampedW <= 0 || clampedH <= 0) return;
+                byte r = (byte)color.R, g = (byte)color.G, b = (byte)color.B, a = (byte)color.A;
+                for (int row = 0; row < clampedH; row++)
+                {
+                    int destY = y + row;
+                    int baseIndex = (destY * Width + x) * 4;
+                    for (int col = 0; col < clampedW; col++)
+                    {
+                        int di = baseIndex + col * 4;
+                        span[di + 0] = r;
+                        span[di + 1] = g;
+                        span[di + 2] = b;
+                        span[di + 3] = a;
+                    }
+                }
+                MarkDirty(x, y);
+                MarkDirty(x + clampedW - 1, y + clampedH - 1);
+            }
+            else
+            {
+                for (int ix = x; ix < x + w; ix++)
+                    for (int iy = y; iy < y + h; iy++)
+                        SetPixel(ix, iy, color);
+                MarkDirty(x, y);
+                MarkDirty(x + w - 1, y + h - 1);
+            }
         }
 
         public void DrawSprite(Sprite sprite, int x, int y)

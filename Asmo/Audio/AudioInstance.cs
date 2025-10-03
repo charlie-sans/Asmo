@@ -7,6 +7,11 @@ namespace Asmo.Audio
     {
     private readonly AudioClip _clip;
     private int _samplePosition;
+    private readonly float[] _samples; // direct reference (immutable clip data)
+    private readonly int _totalSamples;
+    private double _releaseSeconds;
+    private bool _releasing;
+    private int _releaseStartSample;
     private bool _isPlaying = true;
     private float _volume;
     private float _pan;
@@ -20,6 +25,8 @@ namespace Asmo.Audio
         public AudioInstance(AudioClip clip, bool loop, float volume, float pan)
         {
             _clip = clip ?? throw new ArgumentNullException(nameof(clip));
+            _samples = clip.Samples; // internal accessor
+            _totalSamples = clip.TotalSamples;
             Loop = loop;
             Volume = volume;
             _baseVolume = volume;
@@ -47,12 +54,32 @@ namespace Asmo.Audio
 
         public void Stop()
         {
-            Volatile.Write(ref _isPlaying, false);
+            // Initiate a short release if configured; default 30ms if not set.
+            if (!_releasing && _releaseSeconds <= 0)
+            {
+                BeginRelease(0.03f);
+            }
+            else if (!_releasing && _releaseSeconds > 0)
+            {
+                BeginRelease(_releaseSeconds);
+            }
+            else
+            {
+                Volatile.Write(ref _isPlaying, false);
+            }
             if (!_loggedStop)
             {
                 AudioDiagnostics.Log("Instance stopped.");
                 _loggedStop = true;
             }
+        }
+
+        public void BeginRelease(double seconds)
+        {
+            if (!_isPlaying) return;
+            _releaseSeconds = Math.Max(0.001, seconds);
+            _releasing = true;
+            _releaseStartSample = _samplePosition;
         }
 
         public void SetVolume(float volume)
@@ -110,13 +137,13 @@ namespace Asmo.Audio
             int samplesWritten = 0;
             while (samplesWritten < count)
             {
-                int remainingSamples = _clip.TotalSamples - _samplePosition;
+                int remainingSamples = _totalSamples - _samplePosition;
                 if (remainingSamples <= 0)
                 {
                     if (Loop)
                     {
                         _samplePosition = 0;
-                        remainingSamples = _clip.TotalSamples;
+                        remainingSamples = _totalSamples;
                         AudioDiagnostics.Log("Instance loop restart.");
                     }
                     else
@@ -134,13 +161,34 @@ namespace Asmo.Audio
                 }
 
                 int toCopy = Math.Min(remainingSamples, count - samplesWritten);
-                Array.Copy(_clip.GetSampleBuffer(), _samplePosition, buffer, offset + samplesWritten, toCopy);
+                Array.Copy(_samples, _samplePosition, buffer, offset + samplesWritten, toCopy);
                 _samplePosition += toCopy;
                 samplesWritten += toCopy;
             }
 
             if (samplesWritten > 0)
             {
+                // Apply release envelope if active
+                if (_releasing)
+                {
+                    int releaseSamplesTotal = (int)(_releaseSeconds * _clip.SampleRate * _clip.Channels);
+                    int releaseProgressSamples = _samplePosition - _releaseStartSample;
+                    for (int i = 0; i < samplesWritten; i++)
+                    {
+                        int globalSampleIndex = _releaseStartSample + i;
+                        int relProgress = globalSampleIndex - _releaseStartSample;
+                        if (relProgress >= 0 && releaseSamplesTotal > 0)
+                        {
+                            float k = 1f - Math.Clamp(relProgress / (float)releaseSamplesTotal, 0f, 1f);
+                            buffer[offset + i] *= k;
+                        }
+                    }
+                    if (releaseProgressSamples >= releaseSamplesTotal)
+                    {
+                        Volatile.Write(ref _isPlaying, false);
+                    }
+                }
+
                 float localMin = float.MaxValue;
                 float localMax = float.MinValue;
                 for (int i = 0; i < samplesWritten; i++)

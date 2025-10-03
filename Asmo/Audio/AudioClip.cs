@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
-using CSCore;
-using CSCore.Codecs;
+// CSCore removed; this class now only supports procedural generation and simple PCM16 WAV loading.
+using System.IO;
+using System.Buffers.Binary;
 
 namespace Asmo.Audio
 {
@@ -15,7 +16,8 @@ namespace Asmo.Audio
 
         private readonly float[] _samples;
 
-        private AudioClip(float[] samples, int sampleRate, int channels)
+        // Internal so procedural synthesis utilities in the same assembly can construct clips.
+        internal AudioClip(float[] samples, int sampleRate, int channels)
         {
             if (channels <= 0) throw new ArgumentOutOfRangeException(nameof(channels));
             if (sampleRate <= 0) throw new ArgumentOutOfRangeException(nameof(sampleRate));
@@ -32,54 +34,56 @@ namespace Asmo.Audio
     /// </summary>
     public int TotalSamples => _samples.Length;
 
+    // Internal direct access used by mixer / synthesis. Avoid exposing publicly to keep mutability contained.
+    internal float[] Samples => _samples;
+
     /// <summary>
     /// For diagnostics: returns a copy of the sample buffer (do not use for playback).
     /// </summary>
     public float[] GetSampleBuffer() => (float[])_samples.Clone();
 
         /// <summary>
-        /// Loads an audio clip from disk and converts it to the engine's canonical format (floating-point, stereo, 44.1 kHz).
+        /// Loads a 16-bit little-endian PCM WAV file (mono or stereo). Resamples / re-channels if needed.
         /// </summary>
         public static AudioClip Load(string path, int targetSampleRate = DefaultSampleRate, int targetChannels = DefaultChannels)
         {
-            if (string.IsNullOrWhiteSpace(path))
-                throw new ArgumentException("Path must be provided", nameof(path));
-
-            using var codec = CodecFactory.Instance.GetCodec(path);
-            using var source = codec.ToSampleSource();
-            return FromSampleSource(source, targetSampleRate, targetChannels);
-        }
-
-        /// <summary>
-        /// Creates an audio clip from an arbitrary sample source.
-        /// The sample data is fully decoded into memory so the source can be disposed afterwards.
-        /// </summary>
-        public static AudioClip FromSampleSource(ISampleSource source, int targetSampleRate = DefaultSampleRate, int targetChannels = DefaultChannels, bool disposeSource = true)
-        {
-            if (source == null) throw new ArgumentNullException(nameof(source));
-
-            try
+            if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Path required", nameof(path));
+            using var fs = File.OpenRead(path);
+            using var br = new BinaryReader(fs);
+            // Minimal WAV parser
+            if (new string(br.ReadChars(4)) != "RIFF") throw new InvalidDataException("Not RIFF");
+            br.ReadInt32(); // file size
+            if (new string(br.ReadChars(4)) != "WAVE") throw new InvalidDataException("Not WAVE");
+            // fmt chunk
+            if (new string(br.ReadChars(4)) != "fmt ") throw new InvalidDataException("Missing fmt");
+            int fmtSize = br.ReadInt32();
+            short audioFormat = br.ReadInt16();
+            short channels = br.ReadInt16();
+            int sampleRate = br.ReadInt32();
+            br.ReadInt32(); // byte rate
+            br.ReadInt16(); // block align
+            short bitsPerSample = br.ReadInt16();
+            if (fmtSize > 16) br.ReadBytes(fmtSize - 16);
+            if (audioFormat != 1 || (bitsPerSample != 16)) throw new InvalidDataException("Only PCM16 supported");
+            // find data chunk
+            string chunkId;
+            int dataSize = 0;
+            while (true)
             {
-                var samples = ReadAllSamples(source);
-                if (source.WaveFormat.Channels != targetChannels)
-                {
-                    samples = ConvertChannels(samples, source.WaveFormat.Channels, targetChannels);
-                }
-
-                if (source.WaveFormat.SampleRate != targetSampleRate)
-                {
-                    samples = Resample(samples, source.WaveFormat.SampleRate, targetSampleRate, targetChannels);
-                }
-
-                return new AudioClip(samples, targetSampleRate, targetChannels);
+                chunkId = new string(br.ReadChars(4));
+                int size = br.ReadInt32();
+                if (chunkId == "data") { dataSize = size; break; }
+                br.ReadBytes(size);
             }
-            finally
-            {
-                if (disposeSource)
-                {
-                    source.Dispose();
-                }
-            }
+            int frames = dataSize / (channels * (bitsPerSample / 8));
+            short[] pcm = new short[frames * channels];
+            byte[] raw = br.ReadBytes(dataSize);
+            Buffer.BlockCopy(raw, 0, pcm, 0, dataSize);
+            float[] floats = new float[pcm.Length];
+            for (int i = 0; i < pcm.Length; i++) floats[i] = pcm[i] / 32768f;
+            if (channels != targetChannels) floats = ConvertChannels(floats, channels, targetChannels);
+            if (sampleRate != targetSampleRate) floats = Resample(floats, sampleRate, targetSampleRate, targetChannels);
+            return new AudioClip(floats, targetSampleRate, targetChannels);
         }
 
         /// <summary>
@@ -135,20 +139,7 @@ namespace Asmo.Audio
             return new AudioClip(data, sampleRate, channels);
         }
 
-        private static float[] ReadAllSamples(ISampleSource source)
-        {
-            var buffer = new float[source.WaveFormat.SampleRate * source.WaveFormat.Channels];
-            var collected = new List<float>(buffer.Length);
-            int read;
-            while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
-            {
-                for (int i = 0; i < read; i++)
-                {
-                    collected.Add(buffer[i]);
-                }
-            }
-            return collected.ToArray();
-        }
+        // Removed generic sample source ingestion (CSCore). WAV loader + procedural remain.
 
         private static float[] ConvertChannels(float[] samples, int inputChannels, int outputChannels)
         {

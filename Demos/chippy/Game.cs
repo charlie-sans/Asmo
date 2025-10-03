@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using Asmo.Audio;
 using Asmo.Gfx;
-using Asmo.Sound;
 using Asmo.Types;
 using Asmo.Window.input;
-using CSCore;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
 namespace Chippy
@@ -99,20 +97,10 @@ namespace Chippy
         };
 
 
-        private readonly Instrument[] instruments;
-        private static readonly string[] instrumentNames = new[] { "Square", "Triangle", "Bass", "Noise" };
-        private static readonly float[] instrumentAmps = new[] { 1.0f, 1.0f, 1.0f, 1.0f };
+    private static readonly string[] instrumentNames = new[] { "Square", "Triangle", "Bass", "Noise" };
+    private static readonly float[] instrumentAmps = new[] { 1.0f, 1.0f, 1.0f, 1.0f };
 
-        public Game()
-        {
-            instruments = new Instrument[]
-            {
-                CreateSquareInstrument(),
-                CreateTriangleInstrument(),
-                CreateBassInstrument(),
-                CreateNoiseInstrument()
-            };
-        }
+        public Game() { }
 
         public void Init(Surface surface)
         {
@@ -602,12 +590,11 @@ namespace Chippy
                     continue;
                 }
 
-                int instrumentIndex = Math.Clamp(note.Instrument, 0, instruments.Length - 1);
+                int instrumentIndex = Math.Clamp(note.Instrument, 0, instrumentNames.Length - 1);
                 float amplitude = instrumentAmps[instrumentIndex];
-                var instrument = instruments[instrumentIndex];
                 float frequency = note.GetFrequency();
-                // Let notes ring for a long time unless a note-off or new note is encountered
-                double durationSeconds = 12.0; // e.g. 12 seconds, much longer than any pattern
+                // Derive an actual musical duration from upcoming empty rows so we don't allocate giant 12s clips every time.
+                double durationSeconds = ComputeNoteDuration(row, channel);
 
                 if (step.Effect.Enabled)
                 {
@@ -616,7 +603,7 @@ namespace Chippy
                 }
                 System.Diagnostics.Debug.WriteLine($"[Row {row} Ch {channel}] NewNote: StopChannelVoice, then PlayInstrumentNote freq={frequency} dur={durationSeconds}");
                 StopChannelVoice(channel);
-                PlayInstrumentNote(instrument, frequency, durationSeconds, amplitude, channel);
+                PlayInstrumentNote(instrumentIndex, frequency, durationSeconds, amplitude, channel);
             }
         }
 
@@ -640,10 +627,12 @@ namespace Chippy
                 }
 
                 steps++;
+                // Advance one row at a time (previously jumped 4, shrinking duration incorrectly)
                 row = (row + 1) % PatternRows;
             }
 
-            return Math.Max(steps * stepDuration, MinNoteDurationSeconds);
+            double sustain = Math.Max(steps * stepDuration, MinNoteDurationSeconds);
+            return sustain;
         }
 
         private void UpdateAudio(double deltaTime)
@@ -684,18 +673,14 @@ namespace Chippy
             }
         }
 
-        private void PlayInstrumentNote(Instrument instrument, float frequency, double durationSeconds, float amplitude, int channel)
+        private void PlayInstrumentNote(int instrumentIndex, float frequency, double durationSeconds, float amplitude, int channel)
         {
             double sustainSeconds = Math.Max(durationSeconds, MinNoteDurationSeconds);
             double releaseSeconds = Math.Clamp(sustainSeconds * 0.75, MinReleaseSeconds, MaxReleaseSeconds);
             double totalDurationSeconds = sustainSeconds + releaseSeconds;
 
             Console.WriteLine($"PlayInstrumentNote: freq={frequency} durationSeconds={durationSeconds} sustainSeconds={sustainSeconds} releaseSeconds={releaseSeconds} totalDurationSeconds={totalDurationSeconds}");
-
-            var rawSource = instrument(frequency, (float)totalDurationSeconds, amplitude);
-            using var envelopedSource = new ReleaseEnvelopeSampleSource(rawSource, releaseSeconds, disposeInner: true);
-            var clip = AudioClip.FromSampleSource(envelopedSource, AudioClip.DefaultSampleRate, AudioClip.DefaultChannels);
-
+            var clip = GenerateInstrumentClip(instrumentIndex, frequency, totalDurationSeconds, (float)amplitude, (float)releaseSeconds);
             Console.WriteLine($"  -> clip.TotalSamples={clip.TotalSamples} channels={clip.Channels} sampleRate={clip.SampleRate}");
 
             var settings = AudioPlaybackSettings.Default;
@@ -734,75 +719,22 @@ namespace Chippy
             oneShotQueue.Clear();
         }
 
-        private sealed class ReleaseEnvelopeSampleSource : ISampleSource
+        // Generate instrument-specific clip using ProceduralSynth
+        private AudioClip GenerateInstrumentClip(int instrumentIndex, float frequency, double totalDurationSeconds, float amplitude, float releaseSeconds)
         {
-            private readonly ISampleSource inner;
-            private readonly long totalSamples;
-            private readonly long releaseSamples;
-            private readonly bool disposeInner;
-            private long position;
-
-            public ReleaseEnvelopeSampleSource(ISampleSource inner, double releaseSeconds, bool disposeInner = false)
+            var env = new ProceduralSynth.ADSR(0.005f, 0.05f, 0.75f, releaseSeconds <= 0 ? 0.01f : releaseSeconds);
+            ProceduralSynth.Waveform wf = ProceduralSynth.Waveform.Sine;
+            switch (instrumentIndex)
             {
-                this.inner = inner ?? throw new ArgumentNullException(nameof(inner));
-                WaveFormat = inner.WaveFormat;
-                totalSamples = Math.Max(0, inner.Length);
-                this.disposeInner = disposeInner;
-                int channels = Math.Max(1, WaveFormat.Channels);
-                long requestedReleaseSamples = (long)Math.Round(Math.Max(releaseSeconds, 0) * WaveFormat.SampleRate * channels);
-                releaseSamples = totalSamples > 0
-                    ? Math.Clamp(requestedReleaseSamples, 0, totalSamples)
-                    : requestedReleaseSamples;
+                case 0: wf = ProceduralSynth.Waveform.Square; break; // Square
+                case 1: wf = ProceduralSynth.Waveform.Triangle; break; // Triangle
+                case 2: wf = ProceduralSynth.Waveform.Square; frequency = Math.Max(10f, frequency / 2f); break; // Bass (lower square)
+                case 3: wf = ProceduralSynth.Waveform.Noise; frequency = 440f; break; // Noise ignores frequency
             }
-
-            public WaveFormat WaveFormat { get; }
-
-            public bool CanSeek => false;
-
-            public long Position
-            {
-                get => position;
-                set => throw new NotSupportedException("ReleaseEnvelopeSampleSource does not support seeking.");
-            }
-
-            public long Length => totalSamples;
-
-            public int Read(float[] buffer, int offset, int count)
-            {
-                int samplesRead = inner.Read(buffer, offset, count);
-                Console.WriteLine($"[ReleaseEnvelopeSampleSource] Read: samplesRead={samplesRead} totalSamples={totalSamples} releaseSamples={releaseSamples} position={position}");
-                if (samplesRead <= 0 || releaseSamples <= 0 || totalSamples <= 0)
-                {
-                    position += Math.Max(samplesRead, 0);
-                    return samplesRead;
-                }
-
-                long releaseStart = totalSamples - releaseSamples;
-                for (int i = 0; i < samplesRead; i++)
-                {
-                    long sampleIndex = position + i;
-                    if (sampleIndex >= releaseStart)
-                    {
-                        double progress = (double)(sampleIndex - releaseStart) / Math.Max(1, releaseSamples);
-                        float gain = (float)Math.Clamp(1.0 - progress, 0.0, 1.0);
-                        buffer[offset + i] *= gain;
-                    }
-                }
-
-                position += samplesRead;
-                return samplesRead;
-            }
-
-            public void Dispose()
-            {
-                if (disposeInner)
-                {
-                    inner.Dispose();
-                }
-            }
+            return ProceduralSynth.GenerateTone(frequency, totalDurationSeconds, amplitude, wf, env);
         }
 
-        private double GetStepDurationSeconds() => 60.0 / Math.Max(1.0, bpm) * BeatsPerStep;
+    private double GetStepDurationSeconds() => 60.0 / Math.Max(1.0, bpm) * BeatsPerStep;
 
         private void DrawHeader(Surface surface)
         {
@@ -924,36 +856,7 @@ namespace Chippy
 
         private void SetInstrument(int index)
         {
-            currentInstrument = Math.Clamp(index, 0, instruments.Length - 1);
-        }
-
-        private static Instrument CreateSquareInstrument()
-        {
-            return (frequency, durationSeconds, amplitude) => new SimpleSquareWaveSource(frequency, durationSeconds, amplitude * 0.8f);
-        }
-
-        private static Instrument CreateTriangleInstrument()
-        {
-            return (frequency, durationSeconds, amplitude) => new CustomSampleSource(
-                pos =>
-                {
-                    const float sampleRate = 44100f;
-                    float t = pos / sampleRate;
-                    float phase = (t * frequency) - MathF.Floor(t * frequency);
-                    float value = 1f - 4f * MathF.Abs(phase - 0.5f);
-                    return value * amplitude * 0.8f;
-                },
-                durationSeconds);
-        }
-
-        private static Instrument CreateBassInstrument()
-        {
-            return (frequency, durationSeconds, amplitude) => new SimpleSquareWaveSource(Math.Max(10f, frequency / 2f), durationSeconds, amplitude);
-        }
-
-        private static Instrument CreateNoiseInstrument()
-        {
-            return (frequency, durationSeconds, amplitude) => SoundSynth.WhiteNoise(durationSeconds, amplitude * 0.8f);
+            currentInstrument = Math.Clamp(index, 0, instrumentNames.Length - 1);
         }
     }
 }

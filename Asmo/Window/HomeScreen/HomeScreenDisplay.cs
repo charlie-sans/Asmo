@@ -1,18 +1,6 @@
-﻿using OpenTK.Windowing.Common;
-using System.Threading;
-using Asmo.Sound;
-using Asmo.Audio;
-using System;
-using System.IO;
-using Asmo.Window.input;
-using Asmo.Gui;
+﻿using System;
 using Asmo.Gfx;
 using Asmo.Types;
-using OpenTK.Windowing.Desktop;
-using OpenTK.Graphics.OpenGL4;
-using OpenTK.Mathematics;
-using Microsoft.Xna.Framework;
-using CSCore.Tags.ID3.Frames;
 namespace Asmo.Window.HomeScreen
 {
     public class HomeScreenDisplay
@@ -110,7 +98,7 @@ namespace Asmo.Window.HomeScreen
 
         // Audio fields for boot chime
         private static bool bootChimePlayed = false;
-        private static AudioEngine? audioEngine = null;
+    // TODO: reintegrate AudioEngine boot chime via Raylib (removed OpenTK/XNA remnants)
 
         public HomeScreenDisplay()
         {
@@ -124,24 +112,12 @@ namespace Asmo.Window.HomeScreen
                 // Asmo.DebugOverlay.Current?.Show();
             }
             // Play boot chime only once per app run
-            if (!bootChimePlayed)
-            {
-                try
-                {
-                    if (audioEngine == null)
-                        audioEngine = new AudioEngine();
-           
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Boot chime failed: {ex.Message}");
-                }
-                bootChimePlayed = true;
-            }
+            if (!bootChimePlayed) bootChimePlayed = true; // boot chime temporarily disabled
             // Do not toggle—visibility controlled centrally
         }
 
-        public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
+    // Legacy OpenTK RenderHomeScreen removed in aggressive cleanup.
+    /* public void RenderHomeScreen(FrameEventArgs e, Gfx.Surface framebuffer, Mouse mouse)
         {
             if (_surface == null || _surface != framebuffer)
             {
@@ -319,6 +295,72 @@ namespace Asmo.Window.HomeScreen
                 Asmo.DebugOverlay.Current?.Render(framebuffer);
                 // Asmo.DebugOverlay.Current?.Show();
             }
+    } */
+
+        // Lightweight overload for Raylib path (no OpenTK FrameEventArgs or Mouse class available)
+        public void RenderHomeScreenRaylib(double deltaSeconds, Gfx.Surface framebuffer, int mouseX, int mouseY, bool mouseDown)
+        {
+            // Raylib path uses simplified minimal renderer (no OpenTK types).
+            var adapter = new RaylibMouseAdapter(mouseX, mouseY, mouseDown);
+            RenderHomeScreenMinimal(deltaSeconds, framebuffer, adapter);
+        }
+
+        private record struct RaylibMouseAdapter(int X, int Y, bool Down);
+
+        // Extracted reduced version of RenderHomeScreen that uses adapter instead of full Mouse.
+    private void RenderHomeScreenMinimal(double deltaSeconds, Gfx.Surface framebuffer, RaylibMouseAdapter mouse)
+        {
+            if (_surface == null || _surface != framebuffer)
+                _surface = framebuffer;
+            // Timing / perf
+            float frameMs = (float)(deltaSeconds * 1000.0);
+            homeScreenGraph.AddSample(frameMs);
+            float rawFps = frameMs > 0.01f ? 1000.0f / frameMs : 0f;
+            AccumulatePerf(frameMs);
+            tipTimer += deltaSeconds; if (tipTimer > 5.0) { tipIndex = (tipIndex + 1) % tips.Length; tipTimer = 0; }
+            int panelW = 480, panelH = 260;
+            int panelX = (framebuffer.Width - panelW) / 2;
+            int panelY = (framebuffer.Height - panelH) / 2;
+            framebuffer.DrawOutlinedRect(panelX - 4, panelY - 4, panelW + 8, panelH + 8, Colors.Cyan);
+            framebuffer.DrawVerticalGradientRect(panelX, panelY, panelW, panelH, new Asmo.Types.Color(16,16,48,220), new Asmo.Types.Color(32,32,64,220));
+            bool mouseDown = mouse.Down;
+            int mouseX = mouse.X; int mouseY = mouse.Y;
+            Asmo.Gui.Gui.Begin(panelX + 16, panelY + 16);
+            string[] tabs = new [] { "Home", "System", "Performance", "About" };
+            int selected = Asmo.Gui.Gui.Tabs(framebuffer, "home_screen_tabs", tabs, mouseX, mouseY, mouseDown);
+            switch(selected)
+            {
+                case 0:
+                    framebuffer.DrawText(panelX + 24, panelY + 28, "ASMO GAME CONSOLE", Colors.Yellow);
+                    framebuffer.DrawText(panelX + 24, panelY + 52, "Drop a game file (DLL or ZIP) to play!", Colors.White);
+                    framebuffer.DrawText(panelX + 24, panelY + 68, "(Or drag a folder with a game DLL)", Colors.Gray);
+                    framebuffer.DrawText(panelX + 24, panelY + 88, $"Tip: {tips[tipIndex]}", Colors.Green);
+                    break;
+                case 2:
+                    framebuffer.DrawText(panelX + 24, panelY + 48, $"Frame: {frameMs:F2} ms ({rawFps:F1} fps)", Colors.White);
+                    framebuffer.DrawText(panelX + 220, panelY + 48, $"Min: {perfMinMs:F2} ms", Colors.Green);
+                    framebuffer.DrawText(panelX + 220, panelY + 64, $"Avg: {PerfAvgMs:F2} ms", Colors.Cyan);
+                    framebuffer.DrawText(panelX + 220, panelY + 80, $"Max: {perfMaxMs:F2} ms", Colors.Red);
+                    break;
+                case 3:
+                    framebuffer.DrawText(panelX + 24, panelY + 48, $"Author: {author}", Colors.Cyan);
+                    framebuffer.DrawText(panelX + 24, panelY + 64, $"GitHub: {github}", Colors.Blue);
+                    framebuffer.DrawText(panelX + 24, panelY + 80, description, Colors.White);
+                    break;
+            }
+            // Home tab buttons (subset)
+            if (selected == 0)
+            {
+                int actionsY = panelY + 120; int actionsX = panelX + 24; int bw;
+                if (DrawSimpleButton(framebuffer, "Toggle Overlay", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw)) Asmo.DebugOverlay.Current?.Toggle();
+                actionsX += bw + 12;
+                if (DrawSimpleButton(framebuffer, "Settings", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw)) showSettings = !showSettings;
+                actionsX += bw + 12;
+                if (DrawSimpleButton(framebuffer, "Exit", actionsX, actionsY, mouseX, mouseY, mouseDown, out bw)) { /* exit handled externally */ }
+            }
+            // Mouse cursor box
+            if (mouseX >= 0 && mouseY >= 0 && mouseX < framebuffer.Width && mouseY < framebuffer.Height)
+                framebuffer.DrawOutlinedRect(mouseX - 4, mouseY - 4, 9, 9, Colors.Magenta);
         }
     }
 }
