@@ -23,7 +23,7 @@ namespace Asmo.Window
     {
         public bool UseVr { get; private set; }
     private VrManager? _vr;
-        // Central canonical window title (update here if you want to rename globally)
+        // Central canonical window title 
 
         public Window(GameWindowSettings settings, bool useVr = false)
             : this(settings)

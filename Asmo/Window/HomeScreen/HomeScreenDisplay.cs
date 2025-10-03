@@ -310,6 +310,7 @@ namespace Asmo.Window.HomeScreen
         // Extracted reduced version of RenderHomeScreen that uses adapter instead of full Mouse.
     private void RenderHomeScreenMinimal(double deltaSeconds, Gfx.Surface framebuffer, RaylibMouseAdapter mouse)
         {
+            framebuffer.Clear(Colors.Black);
             if (_surface == null || _surface != framebuffer)
                 _surface = framebuffer;
             // Timing / perf
